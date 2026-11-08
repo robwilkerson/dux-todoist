@@ -28,10 +28,12 @@ PluginSettings {
         width: parent.width
         spacing: Theme.spacingS
 
-        // "unknown" | "saved" | "missing" | "saving" | "error"
+        // "unknown" | "saved" | "missing" | "saving" | "error" | "noSecretTool"
         property string tokenState: "unknown"
         property string errorText: ""
         property string pending: ""
+
+        readonly property string noSecretToolText: "secret-tool isn't installed. Install libsecret-tools (Debian, Ubuntu) or libsecret (Fedora, Arch)."
 
         Component.onCompleted: check.running = true
 
@@ -56,7 +58,7 @@ PluginSettings {
             width: parent.width
             wrapMode: Text.WordWrap
             font.pixelSize: Theme.fontSizeSmall
-            color: tokenSection.tokenState === "error" ? Theme.error : Theme.surfaceVariantText
+            color: tokenSection.tokenState === "error" || tokenSection.tokenState === "noSecretTool" ? Theme.error : Theme.surfaceVariantText
             text: {
                 switch (tokenSection.tokenState) {
                 case "saved":
@@ -67,6 +69,8 @@ PluginSettings {
                     return "Saving…";
                 case "error":
                     return "Couldn't reach your keyring: " + tokenSection.errorText;
+                case "noSecretTool":
+                    return tokenSection.noSecretToolText;
                 default:
                     return "Checking your keyring…";
                 }
@@ -106,6 +110,16 @@ PluginSettings {
             stderr: StdioCollector {
                 id: checkErr
             }
+            // A missing binary emits only `runningChanged`; see TodoistClient.
+            property bool launched: false
+            onStarted: launched = true
+            onRunningChanged: {
+                if (running)
+                    return;
+                if (!launched)
+                    tokenSection.tokenState = "noSecretTool";
+                launched = false;
+            }
             onExited: exitCode => {
                 const err = checkErr.text.trim();
                 if (exitCode === 0 && checkOut.text.trim() !== "") {
@@ -128,7 +142,18 @@ PluginSettings {
             stderr: StdioCollector {
                 id: storeErr
             }
+            property bool launched: false
+            onRunningChanged: {
+                if (running)
+                    return;
+                if (!launched) {
+                    tokenSection.pending = "";
+                    tokenSection.tokenState = "noSecretTool";
+                }
+                launched = false;
+            }
             onStarted: {
+                launched = true;
                 store.write(tokenSection.pending);
                 tokenSection.pending = "";
                 store.stdinEnabled = false;

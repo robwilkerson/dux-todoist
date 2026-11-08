@@ -154,6 +154,8 @@ PluginComponent {
             return "Add your Todoist API token in the plugin's settings.";
         case "noKeyring":
             return "Can't reach a keyring (Secret Service). " + client.errorText;
+        case "noSecretTool":
+            return "secret-tool isn't installed. Install libsecret-tools (Debian, Ubuntu) or libsecret (Fedora, Arch).";
         case "error":
             return "Couldn't load tasks: " + client.errorText;
         case "ready":

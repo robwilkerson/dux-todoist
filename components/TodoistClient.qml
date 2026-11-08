@@ -15,7 +15,7 @@ Item {
     // always included, since `due before:` matches every earlier date.
     property int daysAhead: 1
 
-    // "idle" | "loading" | "ready" | "noToken" | "noKeyring" | "error"
+    // "idle" | "loading" | "ready" | "noToken" | "noKeyring" | "noSecretTool" | "error"
     property string status: "idle"
     property string errorText: ""
 
@@ -83,6 +83,20 @@ Item {
         }
         stderr: StdioCollector {
             id: lookupErr
+        }
+
+        // A missing binary emits neither `started` nor `exited`, only
+        // `runningChanged` to false, so `launched` tells the two apart.
+        property bool launched: false
+        onStarted: launched = true
+        onRunningChanged: {
+            if (running)
+                return;
+            if (!launched) {
+                client.busy = false;
+                client.status = "noSecretTool";
+            }
+            launched = false;
         }
 
         onExited: exitCode => {
