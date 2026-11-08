@@ -146,6 +146,11 @@ PluginComponent {
     readonly property var overdueTasks: client.tasks.filter(t => t.date < localDate(0))
     readonly property var agendaTasks: client.tasks.filter(t => t.date >= localDate(0))
 
+    // The plugin can't work at all: no Todoist app, or no secret-tool to read
+    // the token with. Tints the pill and styles the popout message as an error.
+    readonly property bool hardFail: !appInstalled || client.status === "noSecretTool"
+    readonly property color pillColor: hardFail ? Theme.error : Theme.widgetIconColor
+
     readonly property string emptyMessage: {
         if (!appInstalled)
             return "Todoist wasn't found. Install it (Flathub: com.todoist.Todoist), or remove this widget from the bar.";
@@ -154,6 +159,8 @@ PluginComponent {
             return "Add your Todoist API token in the plugin's settings.";
         case "noKeyring":
             return "Can't reach a keyring (Secret Service). " + client.errorText;
+        case "noSecretTool":
+            return client.errorText;
         case "error":
             return "Couldn't load tasks: " + client.errorText;
         case "ready":
@@ -173,7 +180,7 @@ PluginComponent {
                 id: barIcon
                 anchors.centerIn: parent
                 size: root.markSize
-                markColor: root.appInstalled ? Theme.widgetIconColor : Theme.error
+                markColor: root.pillColor
             }
         }
     }
@@ -188,7 +195,7 @@ PluginComponent {
                 id: barIconV
                 anchors.centerIn: parent
                 size: root.markSize
-                markColor: root.appInstalled ? Theme.widgetIconColor : Theme.error
+                markColor: root.pillColor
             }
         }
     }
@@ -234,10 +241,12 @@ PluginComponent {
                     width: parent.width
                     leftPadding: Theme.spacingS
                     rightPadding: Theme.spacingS
+                    topPadding: Theme.spacingM
+                    bottomPadding: Theme.spacingM
                     text: root.emptyMessage
                     wrapMode: Text.WordWrap
-                    font.pixelSize: Theme.fontSizeMedium
-                    color: Theme.surfaceVariantText
+                    font.pixelSize: root.hardFail ? Theme.fontSizeLarge : Theme.fontSizeMedium
+                    color: root.hardFail ? Theme.error : Theme.surfaceVariantText
                 }
 
                 DFlickable {

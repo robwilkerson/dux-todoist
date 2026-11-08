@@ -15,7 +15,7 @@ Item {
     // always included, since `due before:` matches every earlier date.
     property int daysAhead: 1
 
-    // "idle" | "loading" | "ready" | "noToken" | "noKeyring" | "error"
+    // "idle" | "loading" | "ready" | "noToken" | "noKeyring" | "noSecretTool" | "error"
     property string status: "idle"
     property string errorText: ""
 
@@ -74,7 +74,7 @@ Item {
         }
     }
 
-    Process {
+    SecretTool {
         id: lookup
         command: ["secret-tool", "lookup", "application", "dux-todoist"]
 
@@ -83,6 +83,12 @@ Item {
         }
         stderr: StdioCollector {
             id: lookupErr
+        }
+
+        onNotFound: {
+            client.busy = false;
+            client.errorText = lookup.installHint;
+            client.status = "noSecretTool";
         }
 
         onExited: exitCode => {

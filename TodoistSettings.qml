@@ -3,6 +3,7 @@ import Quickshell.Io
 import qs.Common
 import qs.DCommon.Widgets
 import qs.Modules.Plugins
+import "./components"
 
 PluginSettings {
     id: root
@@ -28,7 +29,7 @@ PluginSettings {
         width: parent.width
         spacing: Theme.spacingS
 
-        // "unknown" | "saved" | "missing" | "saving" | "error"
+        // "unknown" | "saved" | "missing" | "saving" | "error" | "noSecretTool"
         property string tokenState: "unknown"
         property string errorText: ""
         property string pending: ""
@@ -56,7 +57,7 @@ PluginSettings {
             width: parent.width
             wrapMode: Text.WordWrap
             font.pixelSize: Theme.fontSizeSmall
-            color: tokenSection.tokenState === "error" ? Theme.error : Theme.surfaceVariantText
+            color: tokenSection.tokenState === "error" || tokenSection.tokenState === "noSecretTool" ? Theme.error : Theme.surfaceVariantText
             text: {
                 switch (tokenSection.tokenState) {
                 case "saved":
@@ -67,6 +68,8 @@ PluginSettings {
                     return "Saving…";
                 case "error":
                     return "Couldn't reach your keyring: " + tokenSection.errorText;
+                case "noSecretTool":
+                    return check.installHint;
                 default:
                     return "Checking your keyring…";
                 }
@@ -97,7 +100,7 @@ PluginSettings {
 
         // Exit 0 with output means a token exists. The token itself is never
         // shown or kept; only whether one is there.
-        Process {
+        SecretTool {
             id: check
             command: ["secret-tool", "lookup", "application", "dux-todoist"]
             stdout: StdioCollector {
@@ -106,6 +109,7 @@ PluginSettings {
             stderr: StdioCollector {
                 id: checkErr
             }
+            onNotFound: tokenSection.tokenState = "noSecretTool"
             onExited: exitCode => {
                 const err = checkErr.text.trim();
                 if (exitCode === 0 && checkOut.text.trim() !== "") {
@@ -121,12 +125,18 @@ PluginSettings {
 
         // secret-tool reads the secret from stdin until EOF, so stdin is closed
         // right after writing rather than sending a trailing newline.
-        Process {
+        SecretTool {
             id: store
             command: ["secret-tool", "store", "--label=Todoist API token (Dux)", "application", "dux-todoist"]
             stdinEnabled: true
             stderr: StdioCollector {
                 id: storeErr
+            }
+            // Hand the paste back so a retry after installing doesn't need it again.
+            onNotFound: {
+                tokenField.text = tokenSection.pending;
+                tokenSection.pending = "";
+                tokenSection.tokenState = "noSecretTool";
             }
             onStarted: {
                 store.write(tokenSection.pending);
