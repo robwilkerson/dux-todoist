@@ -74,7 +74,7 @@ Item {
         }
     }
 
-    Process {
+    SecretTool {
         id: lookup
         command: ["secret-tool", "lookup", "application", "dux-todoist"]
 
@@ -85,18 +85,10 @@ Item {
             id: lookupErr
         }
 
-        // A missing binary emits neither `started` nor `exited`, only
-        // `runningChanged` to false, so `launched` tells the two apart.
-        property bool launched: false
-        onStarted: launched = true
-        onRunningChanged: {
-            if (running)
-                return;
-            if (!launched) {
-                client.busy = false;
-                client.status = "noSecretTool";
-            }
-            launched = false;
+        onNotFound: {
+            client.busy = false;
+            client.errorText = installHint;
+            client.status = "noSecretTool";
         }
 
         onExited: exitCode => {

@@ -146,6 +146,12 @@ PluginComponent {
     readonly property var overdueTasks: client.tasks.filter(t => t.date < localDate(0))
     readonly property var agendaTasks: client.tasks.filter(t => t.date >= localDate(0))
 
+    // Error tint when the plugin can't work at all: no Todoist app, or no
+    // secret-tool to read the token with.
+    readonly property color pillColor: !appInstalled || client.status === "noSecretTool" ? Theme.error : Theme.widgetIconColor
+
+    readonly property bool messageIsError: appInstalled && client.status === "noSecretTool"
+
     readonly property string emptyMessage: {
         if (!appInstalled)
             return "Todoist wasn't found. Install it (Flathub: com.todoist.Todoist), or remove this widget from the bar.";
@@ -155,7 +161,7 @@ PluginComponent {
         case "noKeyring":
             return "Can't reach a keyring (Secret Service). " + client.errorText;
         case "noSecretTool":
-            return "secret-tool isn't installed. Install libsecret-tools (Debian, Ubuntu) or libsecret (Fedora, Arch).";
+            return client.errorText;
         case "error":
             return "Couldn't load tasks: " + client.errorText;
         case "ready":
@@ -175,7 +181,7 @@ PluginComponent {
                 id: barIcon
                 anchors.centerIn: parent
                 size: root.markSize
-                markColor: root.appInstalled ? Theme.widgetIconColor : Theme.error
+                markColor: root.pillColor
             }
         }
     }
@@ -190,7 +196,7 @@ PluginComponent {
                 id: barIconV
                 anchors.centerIn: parent
                 size: root.markSize
-                markColor: root.appInstalled ? Theme.widgetIconColor : Theme.error
+                markColor: root.pillColor
             }
         }
     }
@@ -236,10 +242,12 @@ PluginComponent {
                     width: parent.width
                     leftPadding: Theme.spacingS
                     rightPadding: Theme.spacingS
+                    topPadding: Theme.spacingM
+                    bottomPadding: Theme.spacingM
                     text: root.emptyMessage
                     wrapMode: Text.WordWrap
-                    font.pixelSize: Theme.fontSizeMedium
-                    color: Theme.surfaceVariantText
+                    font.pixelSize: root.messageIsError ? Theme.fontSizeLarge : Theme.fontSizeMedium
+                    color: root.messageIsError ? Theme.error : Theme.surfaceVariantText
                 }
 
                 DFlickable {

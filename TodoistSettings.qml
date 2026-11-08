@@ -3,6 +3,7 @@ import Quickshell.Io
 import qs.Common
 import qs.DCommon.Widgets
 import qs.Modules.Plugins
+import "./components"
 
 PluginSettings {
     id: root
@@ -32,8 +33,6 @@ PluginSettings {
         property string tokenState: "unknown"
         property string errorText: ""
         property string pending: ""
-
-        readonly property string noSecretToolText: "secret-tool isn't installed. Install libsecret-tools (Debian, Ubuntu) or libsecret (Fedora, Arch)."
 
         Component.onCompleted: check.running = true
 
@@ -70,7 +69,7 @@ PluginSettings {
                 case "error":
                     return "Couldn't reach your keyring: " + tokenSection.errorText;
                 case "noSecretTool":
-                    return tokenSection.noSecretToolText;
+                    return check.installHint;
                 default:
                     return "Checking your keyring…";
                 }
@@ -101,7 +100,7 @@ PluginSettings {
 
         // Exit 0 with output means a token exists. The token itself is never
         // shown or kept; only whether one is there.
-        Process {
+        SecretTool {
             id: check
             command: ["secret-tool", "lookup", "application", "dux-todoist"]
             stdout: StdioCollector {
@@ -110,16 +109,7 @@ PluginSettings {
             stderr: StdioCollector {
                 id: checkErr
             }
-            // A missing binary emits only `runningChanged`; see TodoistClient.
-            property bool launched: false
-            onStarted: launched = true
-            onRunningChanged: {
-                if (running)
-                    return;
-                if (!launched)
-                    tokenSection.tokenState = "noSecretTool";
-                launched = false;
-            }
+            onNotFound: tokenSection.tokenState = "noSecretTool"
             onExited: exitCode => {
                 const err = checkErr.text.trim();
                 if (exitCode === 0 && checkOut.text.trim() !== "") {
@@ -135,25 +125,18 @@ PluginSettings {
 
         // secret-tool reads the secret from stdin until EOF, so stdin is closed
         // right after writing rather than sending a trailing newline.
-        Process {
+        SecretTool {
             id: store
             command: ["secret-tool", "store", "--label=Todoist API token (Dux)", "application", "dux-todoist"]
             stdinEnabled: true
             stderr: StdioCollector {
                 id: storeErr
             }
-            property bool launched: false
-            onRunningChanged: {
-                if (running)
-                    return;
-                if (!launched) {
-                    tokenSection.pending = "";
-                    tokenSection.tokenState = "noSecretTool";
-                }
-                launched = false;
+            onNotFound: {
+                tokenSection.pending = "";
+                tokenSection.tokenState = "noSecretTool";
             }
             onStarted: {
-                launched = true;
                 store.write(tokenSection.pending);
                 tokenSection.pending = "";
                 store.stdinEnabled = false;
