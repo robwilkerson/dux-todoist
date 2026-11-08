@@ -37,10 +37,19 @@ PluginComponent {
         onTriggered: client.refresh()
     }
 
+    // Found through its desktop entry, which covers the Flatpak (whose binary
+    // isn't on PATH) and native installs alike. Reading `applications` makes
+    // this re-evaluate when apps are installed or removed.
+    readonly property var appEntry: {
+        DesktopEntries.applications.values;
+        return DesktopEntries.heuristicLookup("com.todoist.Todoist") ?? DesktopEntries.heuristicLookup("todoist");
+    }
+    readonly property bool appInstalled: !!appEntry
+
     function openApp() {
         root.closePopout();
         // Todoist is single-instance: a second launch raises the open window.
-        Quickshell.execDetached(["todoist"]);
+        appEntry.execute();
     }
 
     function localDate(offsetDays) {
@@ -62,6 +71,8 @@ PluginComponent {
     readonly property var agendaTasks: client.tasks.filter(t => t.date >= localDate(0))
 
     readonly property string emptyMessage: {
+        if (!appInstalled)
+            return "Todoist wasn't found. Install it (Flathub: com.todoist.Todoist), or remove this widget from the bar.";
         switch (client.status) {
         case "noToken":
             return "Add your Todoist API token in the plugin's settings.";
@@ -86,6 +97,7 @@ PluginComponent {
                 id: barIcon
                 anchors.centerIn: parent
                 size: root.markSize
+                markColor: root.appInstalled ? Theme.widgetIconColor : Theme.error
             }
         }
     }
@@ -100,6 +112,7 @@ PluginComponent {
                 id: barIconV
                 anchors.centerIn: parent
                 size: root.markSize
+                markColor: root.appInstalled ? Theme.widgetIconColor : Theme.error
             }
         }
     }
@@ -151,7 +164,7 @@ PluginComponent {
                     Column {
                         id: groups
                         width: parent.width
-                        spacing: Theme.spacingS
+                        spacing: Theme.spacingL
 
                         TaskGroup {
                             title: "Overdue"
@@ -162,7 +175,7 @@ PluginComponent {
 
                         TaskGroup {
                             title: "Agenda"
-                            titleColor: Theme.primary
+                            titleColor: Theme.surfaceText
                             tasks: root.agendaTasks
                             dueLabel: root.dueLabel
                             emptyText: root.daysAhead === 1 ? "🎉 Enjoy the rest of your day!" : "🎉 Nothing due. Enjoy the break!"
@@ -174,6 +187,7 @@ PluginComponent {
                     width: parent.width
                     text: "Open Todoist"
                     buttonHeight: 36
+                    visible: root.appInstalled
                     onClicked: root.openApp()
                 }
             }

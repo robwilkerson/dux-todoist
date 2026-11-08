@@ -25,7 +25,7 @@ Column {
         bottomPadding: Theme.spacingXS
         text: group.title
         font.pixelSize: Theme.fontSizeSmall
-        font.weight: Theme.fontWeightMedium
+        font.weight: Font.Bold
         color: group.titleColor
     }
 

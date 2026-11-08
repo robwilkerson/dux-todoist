@@ -34,8 +34,11 @@ framework. Data comes from Todoist API v1 (`https://api.todoist.com/api/v1/`).
 - **Days ahead is a setting** (`daysAhead`, 1 = today), expressed as the filter
   query `due before: +N days`, not date math in QML. Verified: `+1` returns
   overdue plus today. Task endpoints return only open tasks.
-- **"Open Todoist" runs `todoist`.** The app is single-instance, so a second
-  launch raises the existing window. No IPC.
+- **Find and launch Todoist through its desktop entry**
+  (`DesktopEntries.heuristicLookup("com.todoist.Todoist")`), never a `todoist`
+  binary: the Flatpak puts none on `PATH`. The app is single-instance, so a
+  second launch raises the existing window. No IPC. When the entry is missing,
+  the pill turns `Theme.error` and the popout says so instead of listing tasks.
 - **x86_64 only.** The Todoist Flatpak has no aarch64 build. Without Todoist, the
   plugin shows a clear empty state instead of erroring.
 - **Icon is Todoist's own mark** (SVG in the repo), never a Material icon.
