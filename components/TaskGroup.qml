@@ -16,6 +16,12 @@ Column {
     // Formats a task's YYYY-MM-DD date for the trailing label.
     property var dueLabel: date => date
 
+    // Ids of tasks being completed: shown checked and struck through until
+    // the caller removes them or clears the id after an error.
+    property var pendingIds: []
+
+    signal completeRequested(string taskId)
+
     width: parent.width
     spacing: Theme.spacingXS
     visible: tasks.length > 0 || emptyText !== ""
@@ -41,7 +47,10 @@ Column {
         model: group.tasks
 
         delegate: Item {
+            id: row
+
             required property var modelData
+            readonly property bool pending: group.pendingIds.includes(modelData.id)
 
             width: group.width
             height: Math.max(check.height, itemText.implicitHeight)
@@ -55,9 +64,28 @@ Column {
                 width: Math.round(Theme.fontSizeLarge * 1.2)
                 height: width
                 radius: width / 2
-                color: "transparent"
+                color: row.pending ? Theme.primary : "transparent"
                 border.width: 1.5
-                border.color: Theme.surfaceVariantText
+                border.color: row.pending || checkArea.containsMouse ? Theme.primary : Theme.surfaceVariantText
+
+                DIcon {
+                    anchors.centerIn: parent
+                    name: "check"
+                    size: parent.width * 0.75
+                    color: row.pending ? Theme.primaryText : Theme.primary
+                    visible: row.pending || checkArea.containsMouse
+                }
+
+                // Larger than the circle, for an easier click target.
+                MouseArea {
+                    id: checkArea
+                    anchors.fill: parent
+                    anchors.margins: -Theme.spacingXS
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    enabled: !row.pending
+                    onClicked: group.completeRequested(row.modelData.id)
+                }
             }
 
             StyledText {
@@ -72,7 +100,8 @@ Column {
                 text: modelData.content
                 elide: Text.ElideRight
                 font.pixelSize: Theme.fontSizeLarge
-                color: Theme.surfaceText
+                font.strikeout: row.pending
+                color: row.pending ? Theme.surfaceVariantText : Theme.surfaceText
 
                 FontMetrics {
                     id: fontMetrics

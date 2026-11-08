@@ -24,6 +24,13 @@ PluginComponent {
 
     Component.onCompleted: client.refresh()
 
+    // The popout's content is built once and reused, so its own onCompleted
+    // doesn't fire per open. interactionActive does.
+    onInteractionActiveChanged: {
+        if (interactionActive)
+            client.refresh();
+    }
+
     TodoistClient {
         id: client
         daysAhead: root.daysAhead
@@ -35,6 +42,75 @@ PluginComponent {
         running: true
         repeat: true
         onTriggered: client.refresh()
+    }
+
+    // A completed task stays visible, struck through, until both its request
+    // has succeeded and this long has passed since the click.
+    readonly property int completeHoldMs: 2000
+
+    // taskId -> { startedAt, succeeded }. Replaced, never mutated, so bindings
+    // on pendingIds update.
+    property var completions: ({})
+    readonly property var pendingIds: Object.keys(completions)
+
+    function completeTask(taskId) {
+        if (completions[taskId])
+            return;
+        completions = Object.assign({}, completions, {
+            [taskId]: {
+                startedAt: Date.now(),
+                succeeded: false
+            }
+        });
+        client.complete(taskId);
+    }
+
+    function dropCompletion(taskId) {
+        const next = Object.assign({}, completions);
+        delete next[taskId];
+        completions = next;
+    }
+
+    Connections {
+        target: client
+
+        function onCompleted(taskId, ok, errorText) {
+            if (!root.completions[taskId])
+                return;
+            if (!ok) {
+                root.dropCompletion(taskId);
+                ToastService.showError("Couldn't complete task in Todoist", errorText);
+                return;
+            }
+            root.completions = Object.assign({}, root.completions, {
+                [taskId]: Object.assign({}, root.completions[taskId], {
+                    succeeded: true
+                })
+            });
+        }
+    }
+
+    // Removes each task once its request succeeded and its hold has elapsed,
+    // whichever comes last, then refreshes so a recurring task's next
+    // occurrence shows up.
+    Timer {
+        interval: 100
+        repeat: true
+        running: root.pendingIds.length > 0
+        onTriggered: {
+            const now = Date.now();
+            const done = root.pendingIds.filter(id => {
+                const c = root.completions[id];
+                return c.succeeded && now - c.startedAt >= root.completeHoldMs;
+            });
+            if (done.length === 0)
+                return;
+            for (const id of done) {
+                client.removeLocal(id);
+                root.dropCompletion(id);
+            }
+            client.refresh();
+        }
     }
 
     // Found through its desktop entry, which covers the Flatpak (whose binary
@@ -122,8 +198,6 @@ PluginComponent {
         PopoutComponent {
             headerText: "Todoist"
 
-            Component.onCompleted: client.refresh()
-
             headerActions: Component {
                 DActionButton {
                     iconName: "settings"
@@ -171,6 +245,8 @@ PluginComponent {
                             titleColor: Theme.error
                             tasks: root.overdueTasks
                             dueLabel: root.dueLabel
+                            pendingIds: root.pendingIds
+                            onCompleteRequested: taskId => root.completeTask(taskId)
                         }
 
                         TaskGroup {
@@ -178,6 +254,8 @@ PluginComponent {
                             titleColor: Theme.surfaceText
                             tasks: root.agendaTasks
                             dueLabel: root.dueLabel
+                            pendingIds: root.pendingIds
+                            onCompleteRequested: taskId => root.completeTask(taskId)
                             emptyText: root.daysAhead === 1 ? "🎉 Enjoy the rest of your day!" : "🎉 Nothing due. Enjoy the break!"
                         }
                     }
