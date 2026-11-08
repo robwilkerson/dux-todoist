@@ -1,11 +1,12 @@
 # dux-todoist
 
-A Dux plugin that puts Todoist tasks where the user already looks, the way Apple
-Reminders does: a **bar pill** with a task count that brings up the Todoist
-window on click, and a **desktop widget** showing an agenda for the next N days.
-One plugin, two capabilities, one shared Todoist client. It replaces Todoist's
-tray icon and window-only view; it is not a Todoist client. Creating, editing,
-and completing tasks hand off to the Todoist app. Issue #1 holds the scoping.
+A Dux bar plugin that puts Todoist tasks one click away, the way Apple Reminders
+does: a **bar pill** showing the Todoist mark, whose **popout** lists open tasks
+in two groups, Overdue and Agenda (the next N days). It replaces Todoist's tray
+icon and window-only view; it is not a Todoist client. Creating and editing tasks
+hand off to the Todoist app via the popout's "Open Todoist" button. Issue #1
+holds the original scoping; it planned a desktop widget and a count, both since
+dropped by the owner in favor of the popout.
 
 Dux is DankMaterialShell's new name. The installed shell still uses the old
 names: CLI `dms`, source `/usr/share/quickshell/dms/`, plugins loaded from
@@ -21,19 +22,19 @@ framework. Data comes from Todoist API v1 (`https://api.todoist.com/api/v1/`).
 
 - **Plugin id is `todoist`.** Registry ids are camelCase, no hyphens. The
   installed directory name must match the id.
-- **Two capabilities:** `"dankbar-widget"` and `"desktop-widget"` in
-  `plugin.json`. Read `Modules/DesktopWidgetLayer.qml`,
-  `Modules/Plugins/DesktopPluginComponent.qml`, and
-  `DesktopWidgetSettings/PluginDesktopWidgetSettings.qml` before inventing
-  desktop-widget patterns.
+- **Bar widget only.** One capability, `"dankbar-widget"`; no desktop surface.
 - **Two enables.** Placing the pill in the bar is not enough; without
   `{"todoist":{"enabled":true}}` in `plugin_settings.json` it silently never loads.
-- **The API token never touches the repo.** Where it lives is undecided; compare
-  gnome-keyring (`secret-tool`, needs the `process` permission) with alternatives
-  before picking. Record the decision in an ADR.
-- **Days ahead is a setting**, expressed as a filter query
-  (`GET /tasks/filter?query=due before: +N days`), not date math in QML.
-- **Clicking the pill runs `todoist`.** The app is single-instance, so a second
+- **The API token lives in the Secret Service**, stored and read with
+  `secret-tool` (attribute `application dux-todoist`), so it works with
+  gnome-keyring, KWallet, or KeePassXC. Never write it to plugin settings:
+  `~/.config/dms` is often a dotfiles repo. `secret-tool store` reads stdin to
+  EOF, so close stdin after writing; never send a trailing newline. No keyring
+  means a visible error, never a plaintext fallback.
+- **Days ahead is a setting** (`daysAhead`, 1 = today), expressed as the filter
+  query `due before: +N days`, not date math in QML. Verified: `+1` returns
+  overdue plus today. Task endpoints return only open tasks.
+- **"Open Todoist" runs `todoist`.** The app is single-instance, so a second
   launch raises the existing window. No IPC.
 - **x86_64 only.** The Todoist Flatpak has no aarch64 build. Without Todoist, the
   plugin shows a clear empty state instead of erroring.
@@ -42,9 +43,9 @@ framework. Data comes from Todoist API v1 (`https://api.todoist.com/api/v1/`).
   Colors come from `Theme.*`, no literals.
 - **A settings pane declares `pluginId: "todoist"` itself.** Bar widgets get it
   injected; `PluginSettings` requires it and injects nothing.
-- **Keep the agenda view ignorant of Todoist's response shapes.** A move to
-  CalDAV via dcal is possible. Map API data to plain task objects at the client
-  boundary, but build no provider abstraction until that move is real.
+- **Keep the popout ignorant of Todoist's response shapes.** A move to CalDAV via
+  dcal is possible. `components/TodoistClient.qml` maps API data to plain task
+  objects; build no provider abstraction until that move is real.
 
 ## Dev Loop
 
