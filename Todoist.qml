@@ -146,11 +146,10 @@ PluginComponent {
     readonly property var overdueTasks: client.tasks.filter(t => t.date < localDate(0))
     readonly property var agendaTasks: client.tasks.filter(t => t.date >= localDate(0))
 
-    // Error tint when the plugin can't work at all: no Todoist app, or no
-    // secret-tool to read the token with.
-    readonly property color pillColor: !appInstalled || client.status === "noSecretTool" ? Theme.error : Theme.widgetIconColor
-
-    readonly property bool messageIsError: appInstalled && client.status === "noSecretTool"
+    // The plugin can't work at all: no Todoist app, or no secret-tool to read
+    // the token with. Tints the pill and styles the popout message as an error.
+    readonly property bool hardFail: !appInstalled || client.status === "noSecretTool"
+    readonly property color pillColor: hardFail ? Theme.error : Theme.widgetIconColor
 
     readonly property string emptyMessage: {
         if (!appInstalled)
@@ -246,8 +245,8 @@ PluginComponent {
                     bottomPadding: Theme.spacingM
                     text: root.emptyMessage
                     wrapMode: Text.WordWrap
-                    font.pixelSize: root.messageIsError ? Theme.fontSizeLarge : Theme.fontSizeMedium
-                    color: root.messageIsError ? Theme.error : Theme.surfaceVariantText
+                    font.pixelSize: root.hardFail ? Theme.fontSizeLarge : Theme.fontSizeMedium
+                    color: root.hardFail ? Theme.error : Theme.surfaceVariantText
                 }
 
                 DFlickable {

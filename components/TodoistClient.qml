@@ -87,7 +87,7 @@ Item {
 
         onNotFound: {
             client.busy = false;
-            client.errorText = installHint;
+            client.errorText = lookup.installHint;
             client.status = "noSecretTool";
         }
 

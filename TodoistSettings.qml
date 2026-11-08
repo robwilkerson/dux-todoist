@@ -132,7 +132,9 @@ PluginSettings {
             stderr: StdioCollector {
                 id: storeErr
             }
+            // Hand the paste back so a retry after installing doesn't need it again.
             onNotFound: {
+                tokenField.text = tokenSection.pending;
                 tokenSection.pending = "";
                 tokenSection.tokenState = "noSecretTool";
             }
