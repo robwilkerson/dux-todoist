@@ -199,15 +199,28 @@ PluginComponent {
             headerText: "Todoist"
 
             headerActions: Component {
-                DActionButton {
-                    iconName: "settings"
-                    iconColor: Theme.surfaceVariantText
-                    buttonSize: 28
-                    tooltipText: "Plugin Settings"
-                    tooltipSide: "bottom"
-                    onClicked: {
-                        root.closePopout();
-                        PopoutService.openSettingsWithTab("plugins");
+                Row {
+                    spacing: Theme.spacingXS
+
+                    DRefreshButton {
+                        busy: client.busy
+                        iconColor: Theme.surfaceVariantText
+                        buttonSize: 28
+                        tooltipText: "Refresh"
+                        tooltipSide: "bottom"
+                        onClicked: client.refresh()
+                    }
+
+                    DActionButton {
+                        iconName: "settings"
+                        iconColor: Theme.surfaceVariantText
+                        buttonSize: 28
+                        tooltipText: "Plugin Settings"
+                        tooltipSide: "bottom"
+                        onClicked: {
+                            root.closePopout();
+                            PopoutService.openSettingsWithTab("plugins");
+                        }
                     }
                 }
             }

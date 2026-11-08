@@ -19,6 +19,9 @@ Item {
     property string status: "idle"
     property string errorText: ""
 
+    // True from a refresh request until its fetch settles, success or not.
+    property bool busy: false
+
     // Plain objects: { id, content, date, priority }. `date` is YYYY-MM-DD.
     property var tasks: []
 
@@ -35,6 +38,7 @@ Item {
 
     // Coalesces bursts (a slider drag saves on every step) into one fetch.
     function refresh() {
+        busy = true;
         debounce.restart();
     }
 
@@ -87,6 +91,7 @@ Item {
                 client.fetch(client.query, null, []);
                 return;
             }
+            client.busy = false;
             // No match exits non-zero with nothing on stderr. Anything on
             // stderr means the Secret Service itself could not be reached.
             const err = lookupErr.text.trim();
@@ -122,6 +127,7 @@ Item {
             if (status !== 200) {
                 client.errorText = status === 0 ? "Network error" : "HTTP " + status;
                 client.status = "error";
+                client.busy = false;
                 return;
             }
             let body;
@@ -130,6 +136,7 @@ Item {
             } catch (e) {
                 client.errorText = "Unreadable response from Todoist";
                 client.status = "error";
+                client.busy = false;
                 return;
             }
             const all = acc.concat((body.results || []).map(client.toTask));
@@ -140,6 +147,7 @@ Item {
             all.sort(client.byDueThenPriority);
             client.tasks = all;
             client.status = "ready";
+            client.busy = false;
         });
     }
 
