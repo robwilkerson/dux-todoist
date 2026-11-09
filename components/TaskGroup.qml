@@ -1,5 +1,5 @@
 // A titled list of tasks in the popout. With no tasks it shows `emptyText`,
-// or hides entirely when that is blank.
+// or a blank line when that is blank, so an empty group still reads as one.
 
 import QtQuick
 import qs.Common
@@ -13,8 +13,8 @@ Column {
     property var tasks: []
     property string emptyText: ""
 
-    // Formats a task's YYYY-MM-DD date for the trailing label.
-    property var dueLabel: date => date
+    // Formats a task's trailing label, such as its time or date.
+    property var dueLabel: task => task.date
 
     // Ids of tasks being completed: shown checked and struck through until
     // the caller removes them or clears the id after an error.
@@ -24,7 +24,6 @@ Column {
 
     width: parent.width
     spacing: Theme.spacingXS
-    visible: tasks.length > 0 || emptyText !== ""
 
     StyledText {
         leftPadding: Theme.spacingS
@@ -38,7 +37,7 @@ Column {
     StyledText {
         visible: group.tasks.length === 0
         leftPadding: Theme.spacingS
-        text: group.emptyText
+        text: group.emptyText !== "" ? group.emptyText : " "
         font.pixelSize: Theme.fontSizeLarge
         color: Theme.surfaceText
     }
@@ -109,14 +108,29 @@ Column {
                 }
             }
 
-            StyledText {
+            // A recurring task shows only its next occurrence, so the icon
+            // explains why it appears once.
+            Row {
                 id: due
                 anchors.right: parent.right
                 anchors.rightMargin: Theme.spacingS
                 y: Math.max(0, (itemText.firstLineHeight - height) / 2)
-                text: group.dueLabel(modelData.date)
-                font.pixelSize: Theme.fontSizeSmall
-                color: Theme.surfaceVariantText
+                spacing: Theme.spacingXS
+
+                DIcon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: row.modelData.recurring
+                    name: "sync"
+                    size: Theme.fontSizeSmall
+                    color: Theme.surfaceVariantText
+                }
+
+                StyledText {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: group.dueLabel(row.modelData)
+                    font.pixelSize: Theme.fontSizeSmall
+                    color: Theme.surfaceVariantText
+                }
             }
         }
     }
