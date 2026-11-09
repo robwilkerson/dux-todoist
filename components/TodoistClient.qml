@@ -41,8 +41,13 @@ Item {
     // leaves the list; the client doesn't touch `tasks` here.
     signal completed(string taskId, bool ok, string errorText)
 
+    // Bumped by every refresh request. A response only applies while its
+    // generation is still current, so a slow older one can't land last.
+    property int generation: 0
+
     // Coalesces bursts (a slider drag saves on every step) into one fetch.
     function refresh() {
+        generation++;
         busy = true;
         debounce.restart();
     }
@@ -90,18 +95,24 @@ Item {
             id: lookupErr
         }
 
+        // A refresh requested mid-lookup runs its own lookup next, so this
+        // one's outcome is already stale.
         onNotFound: {
+            if (debounce.running)
+                return;
             client.busy = false;
             client.errorText = lookup.installHint;
             client.status = "noSecretTool";
         }
 
         onExited: exitCode => {
+            if (debounce.running)
+                return;
             client.token = exitCode === 0 ? lookupOut.text.trim() : "";
             if (client.token !== "") {
                 if (client.weekStart < 0)
                     client.fetchWeekStart();
-                client.fetch(client.query, null, []);
+                client.fetch(client.generation, null, []);
                 return;
             }
             client.busy = false;
@@ -128,14 +139,14 @@ Item {
         xhr.send();
     }
 
-    function fetch(query, cursor, acc) {
+    function fetch(gen, cursor, acc) {
         let url = apiBase + "/tasks/filter?limit=200&query=" + encodeURIComponent(query);
         if (cursor)
             url += "&cursor=" + encodeURIComponent(cursor);
 
         request("GET", url, (status, text) => {
-            // A newer refresh changed the window mid-flight; drop this one.
-            if (query !== client.query)
+            // A newer refresh owns the list, the status, and busy now.
+            if (gen !== client.generation)
                 return;
             if (status !== 200) {
                 client.errorText = status === 0 ? "Network error" : "HTTP " + status;
@@ -154,7 +165,7 @@ Item {
             }
             const all = acc.concat((body.results || []).map(client.toTask));
             if (body.next_cursor) {
-                client.fetch(query, body.next_cursor, all);
+                client.fetch(gen, body.next_cursor, all);
                 return;
             }
             all.sort(client.byDueThenPriority);

@@ -153,31 +153,26 @@ PluginComponent {
     // Overdue shows only when it has tasks. The rest show when at least one
     // day of the window falls in them, even if empty. Tomorrow wins over a
     // week boundary. Client order (date, time, priority) carries through.
+    // The groups themselves are fixed, so a refresh only changes their rows.
     readonly property var sections: {
         const tasks = client.tasks;
         const last = daysAhead - 1;
         const now = new Date();
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
         const weekEnd = (weekStart + 6 - now.getDay()) % 7;
-        const between = (from, to) => tasks.filter(t => t.date >= localDate(from) && (to === null || t.date <= localDate(to)));
-
-        const out = [];
-        const overdue = tasks.filter(t => t.date < localDate(0));
-        if (overdue.length > 0)
-            out.push({ title: "Overdue", overdue: true, tasks: overdue, label: dateLabel, emptyText: "" });
-        out.push({ title: "Today (" + dayLabel(now) + ")", tasks: between(0, 0), label: timeLabel, emptyText: "🎉 Nothing planned" });
-        if (last >= 1) {
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            out.push({ title: "Tomorrow (" + dayLabel(tomorrow) + ")", tasks: between(1, 1), label: timeLabel, emptyText: "" });
-        }
-        if (weekEnd >= 2 && last >= 2)
-            out.push({ title: "This Week", tasks: between(2, weekEnd), label: dateLabel, emptyText: "" });
         const nextStart = Math.max(2, weekEnd + 1);
-        if (last >= nextStart)
-            out.push({ title: "Next Week", tasks: between(nextStart, weekEnd + 7), label: dateLabel, emptyText: "" });
-        if (last >= weekEnd + 8)
-            out.push({ title: "Later", tasks: between(weekEnd + 8, null), label: dateLabel, emptyText: "" });
-        return out;
+        const between = (from, to) => tasks.filter(t => t.date >= localDate(from) && (to === null || t.date <= localDate(to)));
+        const overdue = tasks.filter(t => t.date < localDate(0));
+
+        return {
+            overdue: { shown: overdue.length > 0, title: "Overdue", tasks: overdue },
+            today: { shown: true, title: "Today (" + dayLabel(now) + ")", tasks: between(0, 0) },
+            tomorrow: { shown: last >= 1, title: "Tomorrow (" + dayLabel(tomorrow) + ")", tasks: between(1, 1) },
+            thisWeek: { shown: weekEnd >= 2 && last >= 2, title: "This Week", tasks: between(2, weekEnd) },
+            nextWeek: { shown: last >= nextStart, title: "Next Week", tasks: between(nextStart, weekEnd + 7) },
+            later: { shown: last >= weekEnd + 8, title: "Later", tasks: between(weekEnd + 8, null) }
+        };
     }
 
     // The plugin can't work at all: no Todoist app, or no secret-tool to read
@@ -297,14 +292,23 @@ PluginComponent {
                         spacing: Theme.spacingL
 
                         Repeater {
-                            model: root.sections
+                            model: [
+                                { key: "overdue", label: root.dateLabel, emptyText: "" },
+                                { key: "today", label: root.timeLabel, emptyText: "🎉 Nothing planned" },
+                                { key: "tomorrow", label: root.timeLabel, emptyText: "" },
+                                { key: "thisWeek", label: root.dateLabel, emptyText: "" },
+                                { key: "nextWeek", label: root.dateLabel, emptyText: "" },
+                                { key: "later", label: root.dateLabel, emptyText: "" }
+                            ]
 
                             delegate: TaskGroup {
                                 required property var modelData
+                                readonly property var section: root.sections[modelData.key]
 
-                                title: modelData.title
-                                titleColor: modelData.overdue ? Theme.error : Theme.surfaceText
-                                tasks: modelData.tasks
+                                visible: section.shown
+                                title: section.title
+                                titleColor: modelData.key === "overdue" ? Theme.error : Theme.surfaceText
+                                tasks: section.tasks
                                 dueLabel: modelData.label
                                 emptyText: modelData.emptyText
                                 pendingIds: root.pendingIds

@@ -10,8 +10,60 @@ Column {
 
     property string title: ""
     property color titleColor: Theme.primary
+    // Plain task objects from the client. Each change is diffed into `rows`
+    // by id, so unchanged rows keep their delegates instead of rebuilding.
     property var tasks: []
     property string emptyText: ""
+
+    ListModel {
+        id: rows
+    }
+
+    onTasksChanged: sync(tasks)
+    Component.onCompleted: sync(tasks)
+
+    function toRow(t) {
+        return {
+            taskId: t.id,
+            content: t.content,
+            date: t.date,
+            time: t.time,
+            recurring: t.recurring
+        };
+    }
+
+    function indexOf(taskId, from) {
+        for (let i = from; i < rows.count; i++) {
+            if (rows.get(i).taskId === taskId)
+                return i;
+        }
+        return -1;
+    }
+
+    // Removes rows that are gone, then walks the new order, moving, inserting,
+    // or updating each row in place.
+    function sync(next) {
+        const keep = new Set(next.map(t => t.id));
+        for (let i = rows.count - 1; i >= 0; i--) {
+            if (!keep.has(rows.get(i).taskId))
+                rows.remove(i);
+        }
+        for (let i = 0; i < next.length; i++) {
+            const row = toRow(next[i]);
+            const at = indexOf(row.taskId, i);
+            if (at < 0) {
+                rows.insert(i, row);
+                continue;
+            }
+            if (at !== i)
+                rows.move(at, i, 1);
+            const current = rows.get(i);
+            for (const key in row) {
+                if (current[key] !== row[key])
+                    rows.setProperty(i, key, row[key]);
+            }
+        }
+    }
 
     // Formats a task's trailing label, such as its time or date.
     property var dueLabel: task => task.date
@@ -35,7 +87,7 @@ Column {
     }
 
     StyledText {
-        visible: group.tasks.length === 0
+        visible: rows.count === 0
         leftPadding: Theme.spacingS
         text: group.emptyText !== "" ? group.emptyText : " "
         font.pixelSize: Theme.fontSizeLarge
@@ -43,14 +95,17 @@ Column {
     }
 
     Repeater {
-        model: group.tasks
+        model: rows
 
         delegate: Item {
             id: row
 
-            required property var modelData
-            readonly property bool pending: group.pendingIds.includes(modelData.id)
-
+            required property string taskId
+            required property string content
+            required property string date
+            required property string time
+            required property bool recurring
+            readonly property bool pending: group.pendingIds.includes(taskId)
             width: group.width
             height: Math.max(check.height, itemText.implicitHeight)
 
@@ -83,7 +138,7 @@ Column {
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     enabled: !row.pending
-                    onClicked: group.completeRequested(row.modelData.id)
+                    onClicked: group.completeRequested(row.taskId)
                 }
             }
 
@@ -96,7 +151,7 @@ Column {
                 anchors.leftMargin: Theme.spacingS
                 anchors.right: due.left
                 anchors.rightMargin: Theme.spacingS
-                text: modelData.content
+                text: row.content
                 elide: Text.ElideRight
                 font.pixelSize: Theme.fontSizeLarge
                 font.strikeout: row.pending
@@ -119,7 +174,7 @@ Column {
 
                 DIcon {
                     anchors.verticalCenter: parent.verticalCenter
-                    visible: row.modelData.recurring
+                    visible: row.recurring
                     name: "sync"
                     size: Theme.fontSizeSmall
                     color: Theme.surfaceVariantText
@@ -127,7 +182,10 @@ Column {
 
                 StyledText {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: group.dueLabel(row.modelData)
+                    text: group.dueLabel({
+                        date: row.date,
+                        time: row.time
+                    })
                     font.pixelSize: Theme.fontSizeSmall
                     color: Theme.surfaceVariantText
                 }
