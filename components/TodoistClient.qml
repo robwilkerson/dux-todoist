@@ -165,9 +165,15 @@ Item {
     }
 
     // A failure leaves weekStart at -1, so the caller uses the locale's first
-    // day and the next refresh tries again.
+    // day and the next refresh tries again, unless a request is still out.
+    property bool weekStartPending: false
+
     function fetchWeekStart() {
+        if (weekStartPending)
+            return;
+        weekStartPending = true;
         request("GET", apiBase + "/user", (status, text) => {
+            client.weekStartPending = false;
             let day = 0;
             if (status === 200) {
                 try {
@@ -183,8 +189,9 @@ Item {
     }
 
     function toTask(t) {
-        // All-day dues are a bare date. Timed dues add a floating local time,
-        // or end in "Z" for a fixed timezone; Date reads both as local.
+        // All-day dues are a bare date. Timed dues add a floating time, which
+        // Date reads as local, or end in "Z" for a fixed timezone, which Date
+        // converts from UTC to local.
         const raw = t.due?.date || "";
         const when = raw.length > 10 ? new Date(raw) : null;
         return {
