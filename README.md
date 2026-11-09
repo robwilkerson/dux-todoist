@@ -28,8 +28,14 @@ popout.
 ## Popout
 
 - **Overdue**: open tasks due before today, shown only when there are some.
-- **Agenda**: open tasks due from today through the number of days you've set,
-  each with its due day on the right. Says so when nothing's due.
+- **Today** and **Tomorrow**: each task shows its time, if it has one. An empty
+  Today says so.
+- **This Week**, **Next Week**, and **Later**: each task shows its date. Weeks
+  are calendar weeks, starting on the day set in Todoist's "Start of week".
+- Each group appears only when the number of days you've set reaches it, and
+  keeps its header even when empty.
+- **Recurring tasks** carry a two-arrow icon. Todoist only tracks a recurring
+  task's next occurrence, so it appears once.
 - **Complete a task**: click its circle. It stays struck through until Todoist
   confirms, then disappears. Recurring tasks move to their next occurrence. If
   Todoist can't be reached, a notification says so and the task stays.

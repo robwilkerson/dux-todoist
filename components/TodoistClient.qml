@@ -22,8 +22,13 @@ Item {
     // True from a refresh request until its fetch settles, success or not.
     property bool busy: false
 
-    // Plain objects: { id, content, date, priority }. `date` is YYYY-MM-DD.
+    // Plain objects: { id, content, date, time, recurring, priority }. `date`
+    // is local YYYY-MM-DD; `time` is local HH:mm, or "" for an all-day task.
     property var tasks: []
+
+    // Todoist's "Start of week" as a JS getDay() number (0 = Sunday), or -1
+    // until read. Read once per shell session.
+    property int weekStart: -1
 
     readonly property string query: "due before: +" + daysAhead + " days"
     readonly property string apiBase: "https://api.todoist.com/api/v1"
@@ -94,6 +99,8 @@ Item {
         onExited: exitCode => {
             client.token = exitCode === 0 ? lookupOut.text.trim() : "";
             if (client.token !== "") {
+                if (client.weekStart < 0)
+                    client.fetchWeekStart();
                 client.fetch(client.query, null, []);
                 return;
             }
@@ -157,19 +164,51 @@ Item {
         });
     }
 
+    // A failure leaves weekStart at -1, so the caller uses the locale's first
+    // day and the next refresh tries again.
+    function fetchWeekStart() {
+        request("GET", apiBase + "/user", (status, text) => {
+            let day = 0;
+            if (status === 200) {
+                try {
+                    day = JSON.parse(text).start_day;
+                } catch (e) {}
+            }
+            // Todoist counts 1 = Monday through 7 = Sunday.
+            if (day >= 1 && day <= 7)
+                client.weekStart = day % 7;
+            else
+                console.warn("todoist: couldn't read Start of week (HTTP " + status + "); using the locale's first day");
+        });
+    }
+
     function toTask(t) {
+        // All-day dues are a bare date. Timed dues add a floating local time,
+        // or end in "Z" for a fixed timezone; Date reads both as local.
+        const raw = t.due?.date || "";
+        const when = raw.length > 10 ? new Date(raw) : null;
         return {
             id: t.id,
             content: t.content,
-            date: (t.due?.date || "").slice(0, 10),
+            date: when ? Qt.formatDate(when, "yyyy-MM-dd") : raw,
+            time: when ? Qt.formatTime(when, "HH:mm") : "",
+            recurring: !!t.due?.is_recurring,
             priority: t.priority || 1
         };
     }
 
-    // Earliest date first; within a day, Todoist's priority 4 (urgent) first.
+    // Earliest date first. Within a day, timed tasks by time and ahead of
+    // all-day ones, then Todoist's priority 4 (urgent) first.
     function byDueThenPriority(a, b) {
         if (a.date !== b.date)
             return a.date < b.date ? -1 : 1;
+        if (a.time !== b.time) {
+            if (a.time === "")
+                return 1;
+            if (b.time === "")
+                return -1;
+            return a.time < b.time ? -1 : 1;
+        }
         return b.priority - a.priority;
     }
 }

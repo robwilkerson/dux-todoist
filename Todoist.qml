@@ -134,17 +134,51 @@ PluginComponent {
         return Qt.formatDate(d, "yyyy-MM-dd");
     }
 
-    function dueLabel(date) {
-        if (date === localDate(0))
-            return "Today";
-        if (date === localDate(1))
-            return "Tomorrow";
-        return Qt.formatDate(new Date(date + "T00:00:00"), "MMM d");
+    function dayLabel(date) {
+        return Qt.formatDate(date, "ddd, MMM d");
     }
 
-    // Client order (date, then priority) carries through both filters.
-    readonly property var overdueTasks: client.tasks.filter(t => t.date < localDate(0))
-    readonly property var agendaTasks: client.tasks.filter(t => t.date >= localDate(0))
+    function timeLabel(task) {
+        return task.time === "" ? "" : Qt.formatTime(new Date(task.date + "T" + task.time), Locale.ShortFormat);
+    }
+
+    function dateLabel(task) {
+        return dayLabel(new Date(task.date + "T00:00:00"));
+    }
+
+    // Calendar weeks start on Todoist's "Start of week", or the locale's
+    // first day until that's read.
+    readonly property int weekStart: client.weekStart >= 0 ? client.weekStart : Qt.locale().firstDayOfWeek
+
+    // Overdue shows only when it has tasks. The rest show when at least one
+    // day of the window falls in them, even if empty. Tomorrow wins over a
+    // week boundary. Client order (date, time, priority) carries through.
+    readonly property var sections: {
+        const tasks = client.tasks;
+        const last = daysAhead - 1;
+        const now = new Date();
+        const weekEnd = (weekStart + 6 - now.getDay()) % 7;
+        const between = (from, to) => tasks.filter(t => t.date >= localDate(from) && (to === null || t.date <= localDate(to)));
+
+        const out = [];
+        const overdue = tasks.filter(t => t.date < localDate(0));
+        if (overdue.length > 0)
+            out.push({ title: "Overdue", overdue: true, tasks: overdue, label: dateLabel, emptyText: "" });
+        out.push({ title: "Today (" + dayLabel(now) + ")", tasks: between(0, 0), label: timeLabel, emptyText: "🎉 Nothing planned" });
+        if (last >= 1) {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            out.push({ title: "Tomorrow (" + dayLabel(tomorrow) + ")", tasks: between(1, 1), label: timeLabel, emptyText: "" });
+        }
+        if (weekEnd >= 2 && last >= 2)
+            out.push({ title: "This Week", tasks: between(2, weekEnd), label: dateLabel, emptyText: "" });
+        const nextStart = Math.max(2, weekEnd + 1);
+        if (last >= nextStart)
+            out.push({ title: "Next Week", tasks: between(nextStart, weekEnd + 7), label: dateLabel, emptyText: "" });
+        if (last >= weekEnd + 8)
+            out.push({ title: "Later", tasks: between(weekEnd + 8, null), label: dateLabel, emptyText: "" });
+        return out;
+    }
 
     // The plugin can't work at all: no Todoist app, or no secret-tool to read
     // the token with. Tints the pill and styles the popout message as an error.
@@ -262,23 +296,20 @@ PluginComponent {
                         width: parent.width
                         spacing: Theme.spacingL
 
-                        TaskGroup {
-                            title: "Overdue"
-                            titleColor: Theme.error
-                            tasks: root.overdueTasks
-                            dueLabel: root.dueLabel
-                            pendingIds: root.pendingIds
-                            onCompleteRequested: taskId => root.completeTask(taskId)
-                        }
+                        Repeater {
+                            model: root.sections
 
-                        TaskGroup {
-                            title: "Agenda"
-                            titleColor: Theme.surfaceText
-                            tasks: root.agendaTasks
-                            dueLabel: root.dueLabel
-                            pendingIds: root.pendingIds
-                            onCompleteRequested: taskId => root.completeTask(taskId)
-                            emptyText: root.daysAhead === 1 ? "🎉 Enjoy the rest of your day!" : "🎉 Nothing due. Enjoy the break!"
+                            delegate: TaskGroup {
+                                required property var modelData
+
+                                title: modelData.title
+                                titleColor: modelData.overdue ? Theme.error : Theme.surfaceText
+                                tasks: modelData.tasks
+                                dueLabel: modelData.label
+                                emptyText: modelData.emptyText
+                                pendingIds: root.pendingIds
+                                onCompleteRequested: taskId => root.completeTask(taskId)
+                            }
                         }
                     }
                 }
