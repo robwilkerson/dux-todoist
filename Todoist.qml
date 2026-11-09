@@ -11,8 +11,6 @@ PluginComponent {
 
     readonly property real markSize: Theme.barIconSize(root.barThickness, undefined, root.barConfig?.maximizeWidgetIcons, root.barConfig?.iconScale)
 
-    readonly property int refreshMinutes: 5
-
     // The task list grows with its content up to this height, then scrolls.
     readonly property real maxListHeight: 420
 
@@ -27,8 +25,13 @@ PluginComponent {
     // The popout's content is built once and reused, so its own onCompleted
     // doesn't fire per open. interactionActive does.
     onInteractionActiveChanged: {
-        if (interactionActive)
+        if (interactionActive) {
             client.refresh();
+            root.now = root.minuteNow();
+            root.armClock();
+        } else {
+            clock.stop();
+        }
     }
 
     TodoistClient {
@@ -37,11 +40,28 @@ PluginComponent {
         onDaysAheadChanged: refresh()
     }
 
+    // The time the groups are drawn against, floored to the minute. Todoist
+    // stores minutes, so a 3:00 PM task is overdue once this reads 3:00.
+    property var now: minuteNow()
+
+    function minuteNow() {
+        return new Date(Math.floor(Date.now() / 60000) * 60000);
+    }
+
+    // Ticks at the top of each minute while the popout is open, regrouping
+    // locally without a fetch. The pad keeps an early fire from flooring back
+    // to the previous minute.
+    function armClock() {
+        clock.interval = 60000 - Date.now() % 60000 + 50;
+        clock.restart();
+    }
+
     Timer {
-        interval: root.refreshMinutes * 60 * 1000
-        running: true
-        repeat: true
-        onTriggered: client.refresh()
+        id: clock
+        onTriggered: {
+            root.now = root.minuteNow();
+            root.armClock();
+        }
     }
 
     // A completed task stays visible, struck through, until both its request
@@ -131,7 +151,7 @@ PluginComponent {
     }
 
     function localDate(offsetDays) {
-        const d = new Date();
+        const d = new Date(now);
         d.setDate(d.getDate() + offsetDays);
         return Qt.formatDate(d, "yyyy-MM-dd");
     }
@@ -148,6 +168,11 @@ PluginComponent {
         return dayLabel(new Date(task.date + "T00:00:00"));
     }
 
+    // Overdue from earlier today reads better as its time than as today's date.
+    function overdueLabel(task) {
+        return task.date === localDate(0) ? timeLabel(task) : dateLabel(task);
+    }
+
     // Calendar weeks start on Todoist's "Start of week", or the locale's
     // first day until that's read.
     readonly property int weekStart: client.weekStart >= 0 ? client.weekStart : Qt.locale().firstDayOfWeek
@@ -159,17 +184,20 @@ PluginComponent {
     readonly property var sections: {
         const tasks = client.tasks;
         const last = daysAhead - 1;
-        const now = new Date();
-        const tomorrow = new Date();
+        const today = localDate(0);
+        const clockTime = Qt.formatTime(now, "HH:mm");
+        const tomorrow = new Date(now);
         tomorrow.setDate(tomorrow.getDate() + 1);
         const weekEnd = (weekStart + 6 - now.getDay()) % 7;
         const nextStart = Math.max(2, weekEnd + 1);
         const between = (from, to) => tasks.filter(t => t.date >= localDate(from) && (to === null || t.date <= localDate(to)));
-        const overdue = tasks.filter(t => t.date < localDate(0));
+        // Earlier days, plus today's timed tasks once the clock reaches them.
+        const isOverdue = t => t.date < today || (t.date === today && t.time !== "" && t.time <= clockTime);
+        const overdue = tasks.filter(isOverdue);
 
         return {
             overdue: { shown: overdue.length > 0, title: "Overdue", tasks: overdue },
-            today: { shown: true, title: "Today (" + dayLabel(now) + ")", tasks: between(0, 0) },
+            today: { shown: true, title: "Today (" + dayLabel(now) + ")", tasks: between(0, 0).filter(t => !isOverdue(t)) },
             tomorrow: { shown: last >= 1, title: "Tomorrow (" + dayLabel(tomorrow) + ")", tasks: between(1, 1) },
             thisWeek: { shown: weekEnd >= 2 && last >= 2, title: "This Week", tasks: between(2, weekEnd) },
             nextWeek: { shown: last >= nextStart, title: "Next Week", tasks: between(nextStart, weekEnd + 7) },
@@ -295,7 +323,7 @@ PluginComponent {
 
                         Repeater {
                             model: [
-                                { key: "overdue", label: root.dateLabel, emptyText: "" },
+                                { key: "overdue", label: root.overdueLabel, emptyText: "" },
                                 { key: "today", label: root.timeLabel, emptyText: "🎉 Nothing planned" },
                                 { key: "tomorrow", label: root.timeLabel, emptyText: "" },
                                 { key: "thisWeek", label: root.dateLabel, emptyText: "" },
