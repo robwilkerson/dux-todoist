@@ -91,8 +91,8 @@ PluginComponent {
     }
 
     // Removes each task once its request succeeded and its hold has elapsed,
-    // whichever comes last, then refreshes so a recurring task's next
-    // occurrence shows up.
+    // whichever comes last. Only a recurring task needs a refresh, to pick up
+    // its next occurrence; any other task is simply gone.
     Timer {
         interval: 100
         repeat: true
@@ -105,11 +105,13 @@ PluginComponent {
             });
             if (done.length === 0)
                 return;
+            const recurred = client.tasks.some(t => t.recurring && done.includes(t.id));
             for (const id of done) {
                 client.removeLocal(id);
                 root.dropCompletion(id);
             }
-            client.refresh();
+            if (recurred)
+                client.refresh();
         }
     }
 
