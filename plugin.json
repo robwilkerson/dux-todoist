@@ -1,7 +1,7 @@
 {
     "id": "todoist",
     "name": "Todoist",
-    "description": "Todoist tasks in the bar and on the desktop, without the tray icon.",
+    "description": "Todoist tasks in the bar: see what's due, add tasks, and check them off, without the tray icon.",
     "version": "0.1.0",
     "author": "Rob Wilkerson",
     "icon": "checklist",

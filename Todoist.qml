@@ -273,6 +273,9 @@ PluginComponent {
             return { icon: "⌛", message: "Todoist timed out", instruction: instruction };
         if (reason === "Network error")
             return { icon: "📡", message: "Unable to reach Todoist", instruction: instruction };
+        // A typo'd or revoked token. Refreshing can't fix it, so say what can.
+        if (reason === "HTTP 401" || reason === "HTTP 403")
+            return { icon: "🔑", message: "API token rejected", instruction: "Update it in plugin settings" };
         return { icon: "⚠️", message: "Todoist error (" + reason + ")", instruction: instruction };
     }
     readonly property bool listReady: blocker === null && client.status === "ready"
