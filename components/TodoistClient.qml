@@ -165,7 +165,9 @@ Item {
         Timer {}
     }
 
-    function request(method, url, onDone) {
+    // A fetch passes its generation, so a stale one can't flip `offline` after
+    // a newer refresh got through. Other requests always report it.
+    function request(method, url, onDone, gen) {
         const xhr = new XMLHttpRequest();
         const timer = timeoutTimer.createObject(client, {
             interval: requestTimeoutMs
@@ -177,7 +179,8 @@ Item {
                 return;
             settled = true;
             timer.destroy();
-            client.offline = status === 0 || status === timedOut;
+            if (gen === undefined || gen === client.generation)
+                client.offline = status === 0 || status === timedOut;
             onDone(status, text);
         };
         timer.triggered.connect(() => {
@@ -231,7 +234,7 @@ Item {
             client.status = "ready";
             client.refreshed();
             client.busy = false;
-        });
+        }, gen);
     }
 
     // A failure leaves weekStart at -1, so the caller uses the locale's first
