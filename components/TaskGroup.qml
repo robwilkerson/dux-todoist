@@ -72,6 +72,9 @@ Column {
     // the caller removes them or clears the id after an error.
     property var pendingIds: []
 
+    // Pending ids that need attention, drawn in the error color.
+    property var errorIds: []
+
     signal completeRequested(string taskId)
 
     width: parent.width
@@ -106,6 +109,8 @@ Column {
             required property string time
             required property bool recurring
             readonly property bool pending: group.pendingIds.includes(taskId)
+            readonly property bool flagged: group.errorIds.includes(taskId)
+            readonly property color accent: flagged ? Theme.error : Theme.primary
             width: group.width
             height: Math.max(check.height, itemText.implicitHeight)
 
@@ -118,15 +123,15 @@ Column {
                 width: Math.round(Theme.fontSizeLarge * 1.2)
                 height: width
                 radius: width / 2
-                color: row.pending ? Theme.primary : "transparent"
+                color: row.pending ? row.accent : "transparent"
                 border.width: 1.5
-                border.color: row.pending || checkArea.containsMouse ? Theme.primary : Theme.surfaceVariantText
+                border.color: row.pending || checkArea.containsMouse ? row.accent : Theme.surfaceVariantText
 
                 DIcon {
                     anchors.centerIn: parent
                     name: "check"
                     size: parent.width * 0.75
-                    color: row.pending ? Theme.primaryText : Theme.primary
+                    color: row.pending ? (row.flagged ? Theme.onError : Theme.primaryText) : Theme.primary
                     visible: row.pending || checkArea.containsMouse
                 }
 
@@ -155,7 +160,7 @@ Column {
                 elide: Text.ElideRight
                 font.pixelSize: Theme.fontSizeLarge
                 font.strikeout: row.pending
-                color: row.pending ? Theme.surfaceVariantText : Theme.surfaceText
+                color: row.flagged ? Theme.error : row.pending ? Theme.surfaceVariantText : Theme.surfaceText
 
                 FontMetrics {
                     id: fontMetrics

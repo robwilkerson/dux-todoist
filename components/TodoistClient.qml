@@ -48,6 +48,13 @@ Item {
     // leaves the list; the client doesn't touch `tasks` here.
     signal completed(string taskId, bool ok, string errorText)
 
+    // A close timed out, so Todoist may or may not have applied it. The next
+    // `refreshed` carries the server's answer.
+    signal unconfirmed(string taskId)
+
+    // A fetch succeeded and `tasks` now matches the server.
+    signal refreshed
+
     // Bumped by every refresh request. A response only applies while its
     // generation is still current, so a slow older one can't land last.
     property int generation: 0
@@ -67,6 +74,11 @@ Item {
             return;
         }
         request("POST", apiBase + "/tasks/" + encodeURIComponent(taskId) + "/close", (status, text) => {
+            if (status === client.timedOut) {
+                client.unconfirmed(taskId);
+                client.refresh();
+                return;
+            }
             const ok = status === 200 || status === 204;
             client.completed(taskId, ok, ok ? "" : client.failureText(status));
         });
@@ -131,6 +143,8 @@ Item {
             // stderr means the Secret Service itself could not be reached.
             const err = lookupErr.text.trim();
             if (err !== "") {
+                // Too raw for the popout, which says what to do instead.
+                console.warn("todoist: keyring lookup failed: " + err);
                 client.errorText = err;
                 client.status = "noKeyring";
             } else {
@@ -203,7 +217,7 @@ Item {
             try {
                 body = JSON.parse(text);
             } catch (e) {
-                client.fetchFailed("Unreadable response from Todoist");
+                client.fetchFailed("Unreadable response");
                 return;
             }
             const all = acc.concat((body.results || []).map(client.toTask));
@@ -215,6 +229,7 @@ Item {
             client.tasks = all;
             client.staleText = "";
             client.status = "ready";
+            client.refreshed();
             client.busy = false;
         });
     }

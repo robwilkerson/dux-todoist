@@ -68,10 +68,16 @@ PluginComponent {
     // has succeeded and this long has passed since the click.
     readonly property int completeHoldMs: 2000
 
-    // taskId -> { startedAt, succeeded, task }, where `task` is the row as it
-    // was clicked. Replaced, never mutated, so bindings on pendingIds update.
+    // taskId -> { startedAt, succeeded, unconfirmed, task }, where `task` is
+    // the row as it was clicked. Replaced, never mutated, so bindings update.
     property var completions: ({})
     readonly property var pendingIds: Object.keys(completions)
+
+    // Completions whose close timed out. Their rows stay struck through, in
+    // the error color and unclickable, so a retry can't close a recurring
+    // task twice. The next successful refresh releases them to the server's
+    // state.
+    readonly property var unconfirmedIds: pendingIds.filter(id => completions[id].unconfirmed)
 
     function completeTask(taskId) {
         const task = client.tasks.find(t => t.id === taskId);
@@ -81,6 +87,7 @@ PluginComponent {
             [taskId]: {
                 startedAt: Date.now(),
                 succeeded: false,
+                unconfirmed: false,
                 task: task
             }
         });
@@ -120,6 +127,21 @@ PluginComponent {
                 })
             });
         }
+
+        function onUnconfirmed(taskId) {
+            if (!root.completions[taskId])
+                return;
+            root.completions = Object.assign({}, root.completions, {
+                [taskId]: Object.assign({}, root.completions[taskId], {
+                    unconfirmed: true
+                })
+            });
+        }
+
+        function onRefreshed() {
+            for (const id of root.unconfirmedIds)
+                root.dropCompletion(id);
+        }
     }
 
     // Removes each task once its request succeeded and its hold has elapsed,
@@ -128,7 +150,7 @@ PluginComponent {
     Timer {
         interval: 100
         repeat: true
-        running: root.pendingIds.length > 0
+        running: root.pendingIds.length > root.unconfirmedIds.length
         onTriggered: {
             const now = Date.now();
             const done = root.pendingIds.filter(id => {
@@ -224,23 +246,44 @@ PluginComponent {
     // Also tinted while Todoist can't be reached, until a request gets through.
     readonly property color pillColor: hardFail || client.offline ? Theme.error : Theme.widgetIconColor
 
-    readonly property string emptyMessage: {
+    // Stands in for the list when it can't be shown, as ErrorNotice fields,
+    // or null. Loading isn't an error, so it's handled apart.
+    readonly property var blocker: {
         if (!appInstalled)
-            return "Todoist wasn't found. Install it (Flathub: com.todoist.Todoist), or remove this widget from the bar.";
+            return { icon: "🔎", message: "Todoist not installed", instruction: "Install it to use this widget" };
         switch (client.status) {
         case "noToken":
-            return "Add your Todoist API token in the plugin's settings.";
+            return { icon: "🔑", message: "Missing API token", instruction: "Add it in plugin settings" };
         case "noKeyring":
-            return "Can't reach a keyring (Secret Service). " + client.errorText;
+            return { icon: "🔒", message: "Unable to access keyring", instruction: "Unlock it, then refresh" };
         case "noSecretTool":
-            return client.errorText;
+            return { icon: "🔒", message: "Unable to access keyring", instruction: "Install libsecret to use this widget" };
         case "error":
-            return "Couldn't load tasks: " + client.errorText;
-        case "ready":
-            return "";
+            return failureNotice(client.errorText, "Refresh to try again");
         default:
-            return "Loading…";
+            return null;
         }
+    }
+
+    // A request failure as ErrorNotice fields. The reason is one of
+    // client.failureText()'s strings, so the icon can say what kind it was.
+    function failureNotice(reason, instruction) {
+        if (reason === "Timed out")
+            return { icon: "⌛", message: "Unable to reach Todoist (" + reason + ")", instruction: instruction };
+        if (reason === "Network error")
+            return { icon: "📡", message: "Unable to reach Todoist (" + reason + ")", instruction: instruction };
+        return { icon: "⚠️", message: "Todoist error (" + reason + ")", instruction: instruction };
+    }
+    readonly property bool listReady: blocker === null && client.status === "ready"
+
+    // Sits above a loaded list. An unconfirmed completion outranks a failed
+    // refresh, since it asks for something the list alone can't show.
+    readonly property var listNotice: {
+        if (unconfirmedIds.length > 0)
+            return { icon: "❓", message: "Unable to verify completion", instruction: "Refresh to check" };
+        if (client.staleText !== "")
+            return failureNotice(client.staleText, "");
+        return null;
     }
 
     horizontalBarPill: Component {
@@ -309,33 +352,36 @@ PluginComponent {
                 width: parent.width
                 spacing: Theme.spacingM
 
-                StyledText {
-                    visible: root.emptyMessage !== ""
+                ErrorNotice {
+                    visible: root.blocker !== null
                     width: parent.width
-                    leftPadding: Theme.spacingS
-                    rightPadding: Theme.spacingS
                     topPadding: Theme.spacingM
                     bottomPadding: Theme.spacingM
-                    text: root.emptyMessage
-                    wrapMode: Text.WordWrap
-                    font.pixelSize: root.hardFail ? Theme.fontSizeLarge : Theme.fontSizeMedium
-                    color: root.hardFail ? Theme.error : Theme.surfaceVariantText
+                    icon: root.blocker?.icon ?? ""
+                    message: root.blocker?.message ?? ""
+                    instruction: root.blocker?.instruction ?? ""
                 }
 
-                // Small, so the list stays the focus; red, to match the pill.
                 StyledText {
-                    visible: root.emptyMessage === "" && client.staleText !== ""
-                    width: parent.width
+                    visible: root.blocker === null && !root.listReady
                     leftPadding: Theme.spacingS
-                    rightPadding: Theme.spacingS
-                    text: "⛔  Unable to refresh (" + client.staleText + ")."
-                    wrapMode: Text.WordWrap
-                    font.pixelSize: Theme.fontSizeSmall
-                    color: Theme.error
+                    topPadding: Theme.spacingM
+                    bottomPadding: Theme.spacingM
+                    text: "Loading…"
+                    font.pixelSize: Theme.fontSizeMedium
+                    color: Theme.surfaceVariantText
+                }
+
+                ErrorNotice {
+                    visible: root.listReady && root.listNotice !== null
+                    width: parent.width
+                    icon: root.listNotice?.icon ?? ""
+                    message: root.listNotice?.message ?? ""
+                    instruction: root.listNotice?.instruction ?? ""
                 }
 
                 DFlickable {
-                    visible: root.emptyMessage === ""
+                    visible: root.listReady
                     width: parent.width
                     height: Math.min(groups.implicitHeight, root.maxListHeight)
                     contentHeight: groups.implicitHeight
@@ -384,6 +430,7 @@ PluginComponent {
                                     dueLabel: card.modelData.label
                                     emptyText: card.modelData.emptyText
                                     pendingIds: root.pendingIds
+                                    errorIds: root.unconfirmedIds
                                     onCompleteRequested: taskId => root.completeTask(taskId)
                                 }
                             }
