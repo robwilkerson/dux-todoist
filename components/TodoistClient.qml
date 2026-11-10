@@ -140,7 +140,7 @@ Item {
     }
 
     function fetch(gen, cursor, acc) {
-        let url = apiBase + "/tasks/filter?limit=200&query=" + encodeURIComponent(query);
+        let url = apiBase + "/tasks/filter?limit=200&query=" + encodeURIComponent(client.query);
         if (cursor)
             url += "&cursor=" + encodeURIComponent(cursor);
 
