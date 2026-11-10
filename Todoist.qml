@@ -173,7 +173,7 @@ PluginComponent {
     }
 
     function timeLabel(task) {
-        return task.time === "" ? "" : Qt.formatTime(new Date(task.date + "T" + task.time), Locale.ShortFormat);
+        return task.time === "" ? "" : new Date(task.date + "T" + task.time).toLocaleTimeString(Qt.locale(), Locale.ShortFormat);
     }
 
     function dateLabel(task) {
@@ -343,18 +343,35 @@ PluginComponent {
                                 { key: "later", label: root.dateLabel, emptyText: "" }
                             ]
 
-                            delegate: TaskGroup {
+                            // Overdue sits on a card so it stands out from the
+                            // groups that are still on schedule.
+                            delegate: StyledRect {
+                                id: card
+
                                 required property var modelData
                                 readonly property var section: root.sections[modelData.key]
+                                readonly property bool overdue: modelData.key === "overdue"
+                                readonly property real inset: overdue ? Theme.spacingS : 0
 
                                 visible: section.shown
-                                title: section.title
-                                titleColor: modelData.key === "overdue" ? Theme.error : Theme.surfaceText
-                                tasks: section.tasks
-                                dueLabel: modelData.label
-                                emptyText: modelData.emptyText
-                                pendingIds: root.pendingIds
-                                onCompleteRequested: taskId => root.completeTask(taskId)
+                                width: parent.width
+                                height: group.implicitHeight + inset * 2
+                                radius: Theme.cornerRadius
+                                color: overdue ? Theme.withAlpha(Theme.surfaceContainerHigh, 0.55) : "transparent"
+
+                                TaskGroup {
+                                    id: group
+                                    x: card.inset
+                                    y: card.inset
+                                    width: card.width - card.inset * 2
+                                    title: card.section.title
+                                    titleColor: card.overdue ? Theme.error : Theme.surfaceText
+                                    tasks: card.section.tasks
+                                    dueLabel: card.modelData.label
+                                    emptyText: card.modelData.emptyText
+                                    pendingIds: root.pendingIds
+                                    onCompleteRequested: taskId => root.completeTask(taskId)
+                                }
                             }
                         }
                     }
