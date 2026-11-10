@@ -5,8 +5,8 @@ DankMaterialShell) bar widget for [Todoist](https://todoist.com). Puts your
 overdue and upcoming tasks one click away, without Todoist's tray icon or a
 window to open.
 
-Scope is deliberately narrow: **see what's due, and check it off**. Creating
-and editing tasks stay in Todoist's own app, one click away from the popout.
+Scope is deliberately narrow: **see what's due, add it, and check it off**.
+Editing tasks stays in Todoist's own app, one click away from the popout.
 
 ## Prerequisites
 
@@ -42,6 +42,9 @@ popout.
   Todoist can't be reached, a notification says so and the task stays. If the
   request times out, the task stays struck through in red until a refresh shows
   whether Todoist completed it.
+- **Add a task**: click **+**, type it the way you would in Todoist's quick add
+  ("Call mom tomorrow 5pm #Family p1"), and press Enter. The field stays open
+  for the next one; × or Esc closes it. If adding fails, your text stays put.
 - **Refresh**: reloads from Todoist. The list also refreshes every time the
   popout opens. While it's open, tasks move between groups as the clock passes
   their due time, without reloading.
