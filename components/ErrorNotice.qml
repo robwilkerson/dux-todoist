@@ -1,5 +1,6 @@
 // A popout error: an emoji, the error, and optionally what to do about it.
-// Both lines wrap in their own column, so they stay aligned beside the icon.
+// The error is always one line, elided if it must be; the instruction wraps.
+// Both sit in their own column, so they stay aligned beside the icon.
 
 import QtQuick
 import qs.Common
@@ -28,7 +29,7 @@ Row {
         StyledText {
             width: parent.width
             text: notice.message
-            wrapMode: Text.WordWrap
+            elide: Text.ElideRight
             font.pixelSize: Theme.fontSizeMedium
             color: Theme.error
         }

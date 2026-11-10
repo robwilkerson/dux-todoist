@@ -266,12 +266,13 @@ PluginComponent {
     }
 
     // A request failure as ErrorNotice fields. The reason is one of
-    // client.failureText()'s strings, so the icon can say what kind it was.
+    // client.failureText()'s strings; the icon carries the kind, so only
+    // Todoist's own errors spell the reason out.
     function failureNotice(reason, instruction) {
         if (reason === "Timed out")
-            return { icon: "⌛", message: "Unable to reach Todoist (" + reason + ")", instruction: instruction };
+            return { icon: "⌛", message: "Todoist timed out", instruction: instruction };
         if (reason === "Network error")
-            return { icon: "📡", message: "Unable to reach Todoist (" + reason + ")", instruction: instruction };
+            return { icon: "📡", message: "Unable to reach Todoist", instruction: instruction };
         return { icon: "⚠️", message: "Todoist error (" + reason + ")", instruction: instruction };
     }
     readonly property bool listReady: blocker === null && client.status === "ready"
