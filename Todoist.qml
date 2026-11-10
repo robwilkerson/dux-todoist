@@ -44,6 +44,10 @@ PluginComponent {
     // next attempt or by closing the field.
     property var addNotice: null
 
+    // The text of the add in flight. The field may be closed by the time it
+    // fails, so the popout restores it from here instead of losing it.
+    property string pendingAdd: ""
+
     function closeAdd() {
         adding = false;
         addNotice = null;
@@ -55,6 +59,7 @@ PluginComponent {
             return;
         addBusy = true;
         addNotice = null;
+        pendingAdd = trimmed;
         client.addTask(trimmed);
     }
 
@@ -470,9 +475,14 @@ PluginComponent {
                     Connections {
                         target: client
 
+                        // A failure puts the submitted text back if the field
+                        // was closed meanwhile, so reopening it can retry.
                         function onAdded(outcome, detail) {
                             if (outcome === "ok")
                                 addField.text = "";
+                            else if (addField.text === "")
+                                addField.text = root.pendingAdd;
+                            root.pendingAdd = "";
                         }
                     }
                 }
