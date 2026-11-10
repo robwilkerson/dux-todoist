@@ -220,7 +220,9 @@ PluginComponent {
     // The plugin can't work at all: no Todoist app, or no secret-tool to read
     // the token with. Tints the pill and styles the popout message as an error.
     readonly property bool hardFail: !appInstalled || client.status === "noSecretTool"
-    readonly property color pillColor: hardFail ? Theme.error : Theme.widgetIconColor
+
+    // Also tinted while Todoist can't be reached, until a request gets through.
+    readonly property color pillColor: hardFail || client.offline ? Theme.error : Theme.widgetIconColor
 
     readonly property string emptyMessage: {
         if (!appInstalled)
@@ -318,6 +320,18 @@ PluginComponent {
                     wrapMode: Text.WordWrap
                     font.pixelSize: root.hardFail ? Theme.fontSizeLarge : Theme.fontSizeMedium
                     color: root.hardFail ? Theme.error : Theme.surfaceVariantText
+                }
+
+                // Small, so the list stays the focus; red, to match the pill.
+                StyledText {
+                    visible: root.emptyMessage === "" && client.staleText !== ""
+                    width: parent.width
+                    leftPadding: Theme.spacingS
+                    rightPadding: Theme.spacingS
+                    text: "⛔  Unable to refresh (" + client.staleText + ")."
+                    wrapMode: Text.WordWrap
+                    font.pixelSize: Theme.fontSizeSmall
+                    color: Theme.error
                 }
 
                 DFlickable {

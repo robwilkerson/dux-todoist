@@ -19,6 +19,13 @@ Item {
     property string status: "idle"
     property string errorText: ""
 
+    // Why the last refresh failed while a loaded list stayed up, or "".
+    property string staleText: ""
+
+    // True when the last request couldn't reach Todoist at all (no network or
+    // timed out). Any response, even an HTTP error, clears it.
+    property bool offline: false
+
     // True from a refresh request until its fetch settles, success or not.
     property bool busy: false
 
@@ -61,7 +68,7 @@ Item {
         }
         request("POST", apiBase + "/tasks/" + encodeURIComponent(taskId) + "/close", (status, text) => {
             const ok = status === 200 || status === 204;
-            client.completed(taskId, ok, ok ? "" : status === 0 ? "Network error" : "HTTP " + status);
+            client.completed(taskId, ok, ok ? "" : client.failureText(status));
         });
     }
 
@@ -132,15 +139,51 @@ Item {
         }
     }
 
+    // Past this, a request is abandoned rather than left spinning; the next
+    // open or Refresh tries again. Qt applies no timeout of its own.
+    readonly property int requestTimeoutMs: 5000
+
+    // Status passed to onDone when a request times out.
+    readonly property int timedOut: -1
+
+    Component {
+        id: timeoutTimer
+        Timer {}
+    }
+
     function request(method, url, onDone) {
         const xhr = new XMLHttpRequest();
+        const timer = timeoutTimer.createObject(client, {
+            interval: requestTimeoutMs
+        });
+        // Aborting fires DONE too, so whichever comes first settles it.
+        let settled = false;
+        const settle = (status, text) => {
+            if (settled)
+                return;
+            settled = true;
+            timer.destroy();
+            client.offline = status === 0 || status === timedOut;
+            onDone(status, text);
+        };
+        timer.triggered.connect(() => {
+            settle(timedOut, "");
+            xhr.abort();
+        });
         xhr.onreadystatechange = () => {
             if (xhr.readyState === XMLHttpRequest.DONE)
-                onDone(xhr.status, xhr.responseText);
+                settle(xhr.status, xhr.responseText);
         };
         xhr.open(method, url);
         xhr.setRequestHeader("Authorization", "Bearer " + token);
         xhr.send();
+        timer.start();
+    }
+
+    function failureText(status) {
+        if (status === timedOut)
+            return "Timed out";
+        return status === 0 ? "Network error" : "HTTP " + status;
     }
 
     function fetch(gen, cursor, acc) {
@@ -153,18 +196,14 @@ Item {
             if (gen !== client.generation)
                 return;
             if (status !== 200) {
-                client.errorText = status === 0 ? "Network error" : "HTTP " + status;
-                client.status = "error";
-                client.busy = false;
+                client.fetchFailed(client.failureText(status));
                 return;
             }
             let body;
             try {
                 body = JSON.parse(text);
             } catch (e) {
-                client.errorText = "Unreadable response from Todoist";
-                client.status = "error";
-                client.busy = false;
+                client.fetchFailed("Unreadable response from Todoist");
                 return;
             }
             const all = acc.concat((body.results || []).map(client.toTask));
@@ -174,6 +213,7 @@ Item {
             }
             all.sort(client.byDueThenPriority);
             client.tasks = all;
+            client.staleText = "";
             client.status = "ready";
             client.busy = false;
         });
@@ -201,6 +241,18 @@ Item {
             else
                 console.warn("todoist: couldn't read Start of week (HTTP " + status + "); using the locale's first day");
         });
+    }
+
+    // With a list already loaded, a failed fetch keeps it and only says why
+    // it may be out of date. With nothing loaded yet, the failure is the state.
+    function fetchFailed(reason) {
+        if (status === "ready")
+            staleText = reason;
+        else {
+            errorText = reason;
+            status = "error";
+        }
+        busy = false;
     }
 
     function toTask(t) {

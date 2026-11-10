@@ -43,6 +43,9 @@ popout.
 - **Refresh**: reloads from Todoist. The list also refreshes every time the
   popout opens. While it's open, tasks move between groups as the clock passes
   their due time, without reloading.
+- **Offline**: if Todoist can't be reached within 5 seconds, the last loaded
+  list stays up, the pill turns red, and a line says why. The next refresh that
+  gets through clears both.
 - **Open Todoist**: brings up the app for anything the popout doesn't do.
 
 ## Settings
