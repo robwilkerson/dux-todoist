@@ -299,16 +299,32 @@ PluginComponent {
                         Repeater {
                             model: root.sections
 
-                            delegate: TaskGroup {
-                                required property var modelData
+                            // Overdue sits on a card so it stands out from the
+                            // groups that are still on schedule.
+                            delegate: StyledRect {
+                                id: section
 
-                                title: modelData.title
-                                titleColor: modelData.overdue ? Theme.error : Theme.surfaceText
-                                tasks: modelData.tasks
-                                dueLabel: modelData.label
-                                emptyText: modelData.emptyText
-                                pendingIds: root.pendingIds
-                                onCompleteRequested: taskId => root.completeTask(taskId)
+                                required property var modelData
+                                readonly property real inset: modelData.overdue ? Theme.spacingS : 0
+
+                                width: parent.width
+                                height: group.implicitHeight + inset * 2
+                                radius: Theme.cornerRadius
+                                color: modelData.overdue ? Theme.withAlpha(Theme.surfaceContainerHigh, 0.55) : "transparent"
+
+                                TaskGroup {
+                                    id: group
+                                    x: section.inset
+                                    y: section.inset
+                                    width: section.width - section.inset * 2
+                                    title: section.modelData.title
+                                    titleColor: section.modelData.overdue ? Theme.error : Theme.surfaceText
+                                    tasks: section.modelData.tasks
+                                    dueLabel: section.modelData.label
+                                    emptyText: section.modelData.emptyText
+                                    pendingIds: root.pendingIds
+                                    onCompleteRequested: taskId => root.completeTask(taskId)
+                                }
                             }
                         }
                     }
