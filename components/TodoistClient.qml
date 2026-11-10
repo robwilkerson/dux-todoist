@@ -66,8 +66,12 @@ Item {
     }
 
     // Drops a task locally, for after the caller is done showing it.
+    // A fetch still in flight may predate the close and would bring the task
+    // back, so it's replaced by one that starts now.
     function removeLocal(taskId) {
         tasks = tasks.filter(t => t.id !== taskId);
+        if (busy)
+            refresh();
     }
 
     Timer {

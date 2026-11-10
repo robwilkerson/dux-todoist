@@ -68,21 +68,33 @@ PluginComponent {
     // has succeeded and this long has passed since the click.
     readonly property int completeHoldMs: 2000
 
-    // taskId -> { startedAt, succeeded }. Replaced, never mutated, so bindings
-    // on pendingIds update.
+    // taskId -> { startedAt, succeeded, task }, where `task` is the row as it
+    // was clicked. Replaced, never mutated, so bindings on pendingIds update.
     property var completions: ({})
     readonly property var pendingIds: Object.keys(completions)
 
     function completeTask(taskId) {
-        if (completions[taskId])
+        const task = client.tasks.find(t => t.id === taskId);
+        if (completions[taskId] || !task)
             return;
         completions = Object.assign({}, completions, {
             [taskId]: {
                 startedAt: Date.now(),
-                succeeded: false
+                succeeded: false,
+                task: task
             }
         });
         client.complete(taskId);
+    }
+
+    // A task being completed shows as it was clicked until its hold ends, so a
+    // refresh meanwhile can't drop it early or move it to its next occurrence.
+    readonly property var shownTasks: {
+        const ids = Object.keys(completions);
+        if (ids.length === 0)
+            return client.tasks;
+        const held = ids.map(id => completions[id].task);
+        return client.tasks.filter(t => !completions[t.id]).concat(held).sort(client.byDueThenPriority);
     }
 
     function dropCompletion(taskId) {
@@ -125,7 +137,7 @@ PluginComponent {
             });
             if (done.length === 0)
                 return;
-            const recurred = client.tasks.some(t => t.recurring && done.includes(t.id));
+            const recurred = done.some(id => root.completions[id].task.recurring);
             for (const id of done) {
                 client.removeLocal(id);
                 root.dropCompletion(id);
@@ -182,7 +194,7 @@ PluginComponent {
     // week boundary. Client order (date, time, priority) carries through.
     // The groups themselves are fixed, so a refresh only changes their rows.
     readonly property var sections: {
-        const tasks = client.tasks;
+        const tasks = root.shownTasks;
         const last = daysAhead - 1;
         const today = localDate(0);
         const clockTime = Qt.formatTime(now, "HH:mm");
