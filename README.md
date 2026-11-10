@@ -27,7 +27,8 @@ popout.
 
 ## Popout
 
-- **Overdue**: open tasks due before today, shown only when there are some.
+- **Overdue**: open tasks due before today, or earlier today at a time that has
+  passed. Shown only when there are some.
 - **Today** and **Tomorrow**: each task shows its time, if it has one. An empty
   Today says so.
 - **This Week**, **Next Week**, and **Later**: each task shows its date. Weeks
@@ -38,9 +39,15 @@ popout.
   task's next occurrence, so it appears once.
 - **Complete a task**: click its circle. It stays struck through until Todoist
   confirms, then disappears. Recurring tasks move to their next occurrence. If
-  Todoist can't be reached, a notification says so and the task stays.
+  Todoist can't be reached, a notification says so and the task stays. If the
+  request times out, the task stays struck through in red until a refresh shows
+  whether Todoist completed it.
 - **Refresh**: reloads from Todoist. The list also refreshes every time the
-  popout opens, and every 5 minutes.
+  popout opens. While it's open, tasks move between groups as the clock passes
+  their due time, without reloading.
+- **Offline**: if Todoist can't be reached within 5 seconds, the last loaded
+  list stays up, the pill turns red, and a line says why. The next refresh that
+  gets through clears both.
 - **Open Todoist**: brings up the app for anything the popout doesn't do.
 
 ## Settings

@@ -11,8 +11,6 @@ PluginComponent {
 
     readonly property real markSize: Theme.barIconSize(root.barThickness, undefined, root.barConfig?.maximizeWidgetIcons, root.barConfig?.iconScale)
 
-    readonly property int refreshMinutes: 5
-
     // The task list grows with its content up to this height, then scrolls.
     readonly property real maxListHeight: 420
 
@@ -27,8 +25,13 @@ PluginComponent {
     // The popout's content is built once and reused, so its own onCompleted
     // doesn't fire per open. interactionActive does.
     onInteractionActiveChanged: {
-        if (interactionActive)
+        if (interactionActive) {
             client.refresh();
+            root.now = root.minuteNow();
+            root.armClock();
+        } else {
+            clock.stop();
+        }
     }
 
     TodoistClient {
@@ -37,32 +40,68 @@ PluginComponent {
         onDaysAheadChanged: refresh()
     }
 
+    // The time the groups are drawn against, floored to the minute. Todoist
+    // stores minutes, so a 3:00 PM task is overdue once this reads 3:00.
+    property var now: minuteNow()
+
+    function minuteNow() {
+        return new Date(Math.floor(Date.now() / 60000) * 60000);
+    }
+
+    // Ticks at the top of each minute while the popout is open, regrouping
+    // locally without a fetch. The pad keeps an early fire from flooring back
+    // to the previous minute.
+    function armClock() {
+        clock.interval = 60000 - Date.now() % 60000 + 50;
+        clock.restart();
+    }
+
     Timer {
-        interval: root.refreshMinutes * 60 * 1000
-        running: true
-        repeat: true
-        onTriggered: client.refresh()
+        id: clock
+        onTriggered: {
+            root.now = root.minuteNow();
+            root.armClock();
+        }
     }
 
     // A completed task stays visible, struck through, until both its request
     // has succeeded and this long has passed since the click.
     readonly property int completeHoldMs: 2000
 
-    // taskId -> { startedAt, succeeded }. Replaced, never mutated, so bindings
-    // on pendingIds update.
+    // taskId -> { startedAt, succeeded, unconfirmed, task }, where `task` is
+    // the row as it was clicked. Replaced, never mutated, so bindings update.
     property var completions: ({})
     readonly property var pendingIds: Object.keys(completions)
 
+    // Completions whose close timed out. Their rows stay struck through, in
+    // the error color and unclickable, so a retry can't close a recurring
+    // task twice. The next successful refresh releases them to the server's
+    // state.
+    readonly property var unconfirmedIds: pendingIds.filter(id => completions[id].unconfirmed)
+
     function completeTask(taskId) {
-        if (completions[taskId])
+        const task = client.tasks.find(t => t.id === taskId);
+        if (completions[taskId] || !task)
             return;
         completions = Object.assign({}, completions, {
             [taskId]: {
                 startedAt: Date.now(),
-                succeeded: false
+                succeeded: false,
+                unconfirmed: false,
+                task: task
             }
         });
         client.complete(taskId);
+    }
+
+    // A task being completed shows as it was clicked until its hold ends, so a
+    // refresh meanwhile can't drop it early or move it to its next occurrence.
+    readonly property var shownTasks: {
+        const ids = Object.keys(completions);
+        if (ids.length === 0)
+            return client.tasks;
+        const held = ids.map(id => completions[id].task);
+        return client.tasks.filter(t => !completions[t.id]).concat(held).sort(client.byDueThenPriority);
     }
 
     function dropCompletion(taskId) {
@@ -88,15 +127,30 @@ PluginComponent {
                 })
             });
         }
+
+        function onUnconfirmed(taskId) {
+            if (!root.completions[taskId])
+                return;
+            root.completions = Object.assign({}, root.completions, {
+                [taskId]: Object.assign({}, root.completions[taskId], {
+                    unconfirmed: true
+                })
+            });
+        }
+
+        function onRefreshed() {
+            for (const id of root.unconfirmedIds)
+                root.dropCompletion(id);
+        }
     }
 
     // Removes each task once its request succeeded and its hold has elapsed,
-    // whichever comes last, then refreshes so a recurring task's next
-    // occurrence shows up.
+    // whichever comes last. Only a recurring task needs a refresh, to pick up
+    // its next occurrence; any other task is simply gone.
     Timer {
         interval: 100
         repeat: true
-        running: root.pendingIds.length > 0
+        running: root.pendingIds.length > root.unconfirmedIds.length
         onTriggered: {
             const now = Date.now();
             const done = root.pendingIds.filter(id => {
@@ -105,11 +159,13 @@ PluginComponent {
             });
             if (done.length === 0)
                 return;
+            const recurred = done.some(id => root.completions[id].task.recurring);
             for (const id of done) {
                 client.removeLocal(id);
                 root.dropCompletion(id);
             }
-            client.refresh();
+            if (recurred)
+                client.refresh();
         }
     }
 
@@ -129,7 +185,7 @@ PluginComponent {
     }
 
     function localDate(offsetDays) {
-        const d = new Date();
+        const d = new Date(now);
         d.setDate(d.getDate() + offsetDays);
         return Qt.formatDate(d, "yyyy-MM-dd");
     }
@@ -146,6 +202,11 @@ PluginComponent {
         return dayLabel(new Date(task.date + "T00:00:00"));
     }
 
+    // Overdue from earlier today reads better as its time than as today's date.
+    function overdueLabel(task) {
+        return task.date === localDate(0) ? timeLabel(task) : dateLabel(task);
+    }
+
     // Calendar weeks start on Todoist's "Start of week", or the locale's
     // first day until that's read.
     readonly property int weekStart: client.weekStart >= 0 ? client.weekStart : Qt.locale().firstDayOfWeek
@@ -153,55 +214,77 @@ PluginComponent {
     // Overdue shows only when it has tasks. The rest show when at least one
     // day of the window falls in them, even if empty. Tomorrow wins over a
     // week boundary. Client order (date, time, priority) carries through.
+    // The groups themselves are fixed, so a refresh only changes their rows.
     readonly property var sections: {
-        const tasks = client.tasks;
+        const tasks = root.shownTasks;
         const last = daysAhead - 1;
-        const now = new Date();
+        const today = localDate(0);
+        const clockTime = Qt.formatTime(now, "HH:mm");
+        const tomorrow = new Date(now);
+        tomorrow.setDate(tomorrow.getDate() + 1);
         const weekEnd = (weekStart + 6 - now.getDay()) % 7;
-        const between = (from, to) => tasks.filter(t => t.date >= localDate(from) && (to === null || t.date <= localDate(to)));
-
-        const out = [];
-        const overdue = tasks.filter(t => t.date < localDate(0));
-        if (overdue.length > 0)
-            out.push({ title: "Overdue", overdue: true, tasks: overdue, label: dateLabel, emptyText: "" });
-        out.push({ title: "Today (" + dayLabel(now) + ")", tasks: between(0, 0), label: timeLabel, emptyText: "🎉 Nothing planned" });
-        if (last >= 1) {
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            out.push({ title: "Tomorrow (" + dayLabel(tomorrow) + ")", tasks: between(1, 1), label: timeLabel, emptyText: "" });
-        }
-        if (weekEnd >= 2 && last >= 2)
-            out.push({ title: "This Week", tasks: between(2, weekEnd), label: dateLabel, emptyText: "" });
         const nextStart = Math.max(2, weekEnd + 1);
-        if (last >= nextStart)
-            out.push({ title: "Next Week", tasks: between(nextStart, weekEnd + 7), label: dateLabel, emptyText: "" });
-        if (last >= weekEnd + 8)
-            out.push({ title: "Later", tasks: between(weekEnd + 8, null), label: dateLabel, emptyText: "" });
-        return out;
+        const between = (from, to) => tasks.filter(t => t.date >= localDate(from) && (to === null || t.date <= localDate(to)));
+        // Earlier days, plus today's timed tasks once the clock reaches them.
+        const isOverdue = t => t.date < today || (t.date === today && t.time !== "" && t.time <= clockTime);
+        const overdue = tasks.filter(isOverdue);
+
+        return {
+            overdue: { shown: overdue.length > 0, title: "Overdue", tasks: overdue },
+            today: { shown: true, title: "Today (" + dayLabel(now) + ")", tasks: between(0, 0).filter(t => !isOverdue(t)) },
+            tomorrow: { shown: last >= 1, title: "Tomorrow (" + dayLabel(tomorrow) + ")", tasks: between(1, 1) },
+            thisWeek: { shown: weekEnd >= 2 && last >= 2, title: "This Week", tasks: between(2, weekEnd) },
+            nextWeek: { shown: last >= nextStart, title: "Next Week", tasks: between(nextStart, weekEnd + 7) },
+            later: { shown: last >= weekEnd + 8, title: "Later", tasks: between(weekEnd + 8, null) }
+        };
     }
 
     // The plugin can't work at all: no Todoist app, or no secret-tool to read
     // the token with. Tints the pill and styles the popout message as an error.
     readonly property bool hardFail: !appInstalled || client.status === "noSecretTool"
-    readonly property color pillColor: hardFail ? Theme.error : Theme.widgetIconColor
 
-    readonly property string emptyMessage: {
+    // Also tinted while Todoist can't be reached, until a request gets through.
+    readonly property color pillColor: hardFail || client.offline ? Theme.error : Theme.widgetIconColor
+
+    // Stands in for the list when it can't be shown, as ErrorNotice fields,
+    // or null. Loading isn't an error, so it's handled apart.
+    readonly property var blocker: {
         if (!appInstalled)
-            return "Todoist wasn't found. Install it (Flathub: com.todoist.Todoist), or remove this widget from the bar.";
+            return { icon: "🔎", message: "Todoist not installed", instruction: "Install it to use this widget" };
         switch (client.status) {
         case "noToken":
-            return "Add your Todoist API token in the plugin's settings.";
+            return { icon: "🔑", message: "Missing API token", instruction: "Add it in plugin settings" };
         case "noKeyring":
-            return "Can't reach a keyring (Secret Service). " + client.errorText;
+            return { icon: "🔒", message: "Unable to access keyring", instruction: "Unlock it, then refresh" };
         case "noSecretTool":
-            return client.errorText;
+            return { icon: "🔒", message: "Unable to access keyring", instruction: "Install libsecret to use this widget" };
         case "error":
-            return "Couldn't load tasks: " + client.errorText;
-        case "ready":
-            return "";
+            return failureNotice(client.errorText, "Refresh to try again");
         default:
-            return "Loading…";
+            return null;
         }
+    }
+
+    // A request failure as ErrorNotice fields. The reason is one of
+    // client.failureText()'s strings; the icon carries the kind, so only
+    // Todoist's own errors spell the reason out.
+    function failureNotice(reason, instruction) {
+        if (reason === "Timed out")
+            return { icon: "⌛", message: "Todoist timed out", instruction: instruction };
+        if (reason === "Network error")
+            return { icon: "📡", message: "Unable to reach Todoist", instruction: instruction };
+        return { icon: "⚠️", message: "Todoist error (" + reason + ")", instruction: instruction };
+    }
+    readonly property bool listReady: blocker === null && client.status === "ready"
+
+    // Sits above a loaded list. An unconfirmed completion outranks a failed
+    // refresh, since it asks for something the list alone can't show.
+    readonly property var listNotice: {
+        if (unconfirmedIds.length > 0)
+            return { icon: "❓", message: "Unable to verify completion", instruction: "Refresh to check" };
+        if (client.staleText !== "")
+            return failureNotice(client.staleText, "");
+        return null;
     }
 
     horizontalBarPill: Component {
@@ -270,21 +353,36 @@ PluginComponent {
                 width: parent.width
                 spacing: Theme.spacingM
 
-                StyledText {
-                    visible: root.emptyMessage !== ""
+                ErrorNotice {
+                    visible: root.blocker !== null
                     width: parent.width
-                    leftPadding: Theme.spacingS
-                    rightPadding: Theme.spacingS
                     topPadding: Theme.spacingM
                     bottomPadding: Theme.spacingM
-                    text: root.emptyMessage
-                    wrapMode: Text.WordWrap
-                    font.pixelSize: root.hardFail ? Theme.fontSizeLarge : Theme.fontSizeMedium
-                    color: root.hardFail ? Theme.error : Theme.surfaceVariantText
+                    icon: root.blocker?.icon ?? ""
+                    message: root.blocker?.message ?? ""
+                    instruction: root.blocker?.instruction ?? ""
+                }
+
+                StyledText {
+                    visible: root.blocker === null && !root.listReady
+                    leftPadding: Theme.spacingS
+                    topPadding: Theme.spacingM
+                    bottomPadding: Theme.spacingM
+                    text: "Loading…"
+                    font.pixelSize: Theme.fontSizeMedium
+                    color: Theme.surfaceVariantText
+                }
+
+                ErrorNotice {
+                    visible: root.listReady && root.listNotice !== null
+                    width: parent.width
+                    icon: root.listNotice?.icon ?? ""
+                    message: root.listNotice?.message ?? ""
+                    instruction: root.listNotice?.instruction ?? ""
                 }
 
                 DFlickable {
-                    visible: root.emptyMessage === ""
+                    visible: root.listReady
                     width: parent.width
                     height: Math.min(groups.implicitHeight, root.maxListHeight)
                     contentHeight: groups.implicitHeight
@@ -297,32 +395,43 @@ PluginComponent {
                         spacing: Theme.spacingL
 
                         Repeater {
-                            model: root.sections
+                            model: [
+                                { key: "overdue", label: root.overdueLabel, emptyText: "" },
+                                { key: "today", label: root.timeLabel, emptyText: "🎉 Nothing planned" },
+                                { key: "tomorrow", label: root.timeLabel, emptyText: "" },
+                                { key: "thisWeek", label: root.dateLabel, emptyText: "" },
+                                { key: "nextWeek", label: root.dateLabel, emptyText: "" },
+                                { key: "later", label: root.dateLabel, emptyText: "" }
+                            ]
 
                             // Overdue sits on a card so it stands out from the
                             // groups that are still on schedule.
                             delegate: StyledRect {
-                                id: section
+                                id: card
 
                                 required property var modelData
-                                readonly property real inset: modelData.overdue ? Theme.spacingS : 0
+                                readonly property var section: root.sections[modelData.key]
+                                readonly property bool overdue: modelData.key === "overdue"
+                                readonly property real inset: overdue ? Theme.spacingS : 0
 
+                                visible: section.shown
                                 width: parent.width
                                 height: group.implicitHeight + inset * 2
                                 radius: Theme.cornerRadius
-                                color: modelData.overdue ? Theme.withAlpha(Theme.surfaceContainerHigh, 0.55) : "transparent"
+                                color: overdue ? Theme.withAlpha(Theme.surfaceContainerHigh, 0.55) : "transparent"
 
                                 TaskGroup {
                                     id: group
-                                    x: section.inset
-                                    y: section.inset
-                                    width: section.width - section.inset * 2
-                                    title: section.modelData.title
-                                    titleColor: section.modelData.overdue ? Theme.error : Theme.surfaceText
-                                    tasks: section.modelData.tasks
-                                    dueLabel: section.modelData.label
-                                    emptyText: section.modelData.emptyText
+                                    x: card.inset
+                                    y: card.inset
+                                    width: card.width - card.inset * 2
+                                    title: card.section.title
+                                    titleColor: card.overdue ? Theme.error : Theme.surfaceText
+                                    tasks: card.section.tasks
+                                    dueLabel: card.modelData.label
+                                    emptyText: card.modelData.emptyText
                                     pendingIds: root.pendingIds
+                                    errorIds: root.unconfirmedIds
                                     onCompleteRequested: taskId => root.completeTask(taskId)
                                 }
                             }
