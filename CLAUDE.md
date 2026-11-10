@@ -4,8 +4,9 @@ A Dux bar plugin that puts Todoist tasks one click away, the way Apple Reminders
 does: a **bar pill** showing the Todoist mark, whose **popout** lists open tasks
 grouped as Overdue, Today, Tomorrow, This Week, Next Week, and Later, as far
 as the next N days reach. It replaces Todoist's tray
-icon and window-only view; it is not a Todoist client. Creating and editing tasks
-hand off to the Todoist app via the popout's "Open Todoist" button. Issue #1
+icon and window-only view; it is not a Todoist client. Tasks can be added
+(Todoist's own quick-add parsing) and completed; editing hands off to the
+Todoist app via the popout's "Open Todoist" button. Issue #1
 holds the original scoping; it planned a desktop widget and a count, both since
 dropped by the owner in favor of the popout.
 

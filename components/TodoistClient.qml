@@ -55,6 +55,11 @@ Item {
     // A fetch succeeded and `tasks` now matches the server.
     signal refreshed
 
+    // Reports the outcome of addTask(): "ok" with the parsed task title,
+    // "failed" with a failureText() reason, or "unverified" when it timed out
+    // and may have been created anyway.
+    signal added(string outcome, string detail)
+
     // Bumped by every refresh request. A response only applies while its
     // generation is still current, so a slow older one can't land last.
     property int generation: 0
@@ -81,6 +86,36 @@ Item {
             }
             const ok = status === 200 || status === 204;
             client.completed(taskId, ok, ok ? "" : client.failureText(status));
+        });
+    }
+
+    // Creates a task from natural language ("Call mom tomorrow 5pm #Family"),
+    // parsed by Todoist the same way its own quick add does. A refresh follows
+    // either way: on success to place the task, on a timeout to show whether
+    // it landed.
+    function addTask(text) {
+        if (token === "") {
+            added("failed", "No API token");
+            return;
+        }
+        request("POST", apiBase + "/tasks/quick", (status, body) => {
+            if (status === client.timedOut) {
+                client.added("unverified", "");
+                client.refresh();
+                return;
+            }
+            if (status !== 200) {
+                client.added("failed", client.failureText(status));
+                return;
+            }
+            let title = text;
+            try {
+                title = JSON.parse(body).content || text;
+            } catch (e) {}
+            client.added("ok", title);
+            client.refresh();
+        }, undefined, {
+            text: text
         });
     }
 
@@ -166,8 +201,9 @@ Item {
     }
 
     // A fetch passes its generation, so a stale one can't flip `offline` after
-    // a newer refresh got through. Other requests always report it.
-    function request(method, url, onDone, gen) {
+    // a newer refresh got through. Other requests always report it. `body`,
+    // when given, is sent as JSON.
+    function request(method, url, onDone, gen, body) {
         const xhr = new XMLHttpRequest();
         const timer = timeoutTimer.createObject(client, {
             interval: requestTimeoutMs
@@ -193,7 +229,12 @@ Item {
         };
         xhr.open(method, url);
         xhr.setRequestHeader("Authorization", "Bearer " + token);
-        xhr.send();
+        if (body === undefined) {
+            xhr.send();
+        } else {
+            xhr.setRequestHeader("Content-Type", "application/json");
+            xhr.send(JSON.stringify(body));
+        }
         timer.start();
     }
 

@@ -31,7 +31,31 @@ PluginComponent {
             root.armClock();
         } else {
             clock.stop();
+            root.closeAdd();
         }
+    }
+
+    // The add field at the top of the popout. Stays open after each add, so
+    // several can go in a row.
+    property bool adding: false
+    property bool addBusy: false
+
+    // The last add's failure as ErrorNotice fields, or null. Cleared by the
+    // next attempt or by closing the field.
+    property var addNotice: null
+
+    function closeAdd() {
+        adding = false;
+        addNotice = null;
+    }
+
+    function submitAdd(text) {
+        const trimmed = text.trim();
+        if (trimmed === "" || addBusy)
+            return;
+        addBusy = true;
+        addNotice = null;
+        client.addTask(trimmed);
     }
 
     TodoistClient {
@@ -141,6 +165,18 @@ PluginComponent {
         function onRefreshed() {
             for (const id of root.unconfirmedIds)
                 root.dropCompletion(id);
+        }
+
+        // The field clears itself on "ok" (see the popout); a failure keeps
+        // the text so Enter can retry it.
+        function onAdded(outcome, detail) {
+            root.addBusy = false;
+            if (outcome === "ok")
+                ToastService.showInfo("Added to Todoist", detail);
+            else if (outcome === "unverified")
+                root.addNotice = { icon: "❓", message: "Unable to verify task was added", instruction: "Check the list before retrying" };
+            else
+                root.addNotice = root.failureNotice(detail, "Press Enter to try again");
         }
     }
 
@@ -277,9 +313,12 @@ PluginComponent {
     }
     readonly property bool listReady: blocker === null && client.status === "ready"
 
-    // Sits above a loaded list. An unconfirmed completion outranks a failed
-    // refresh, since it asks for something the list alone can't show.
+    // Sits above a loaded list. A failed add is shown first, since it sits
+    // right under the field that caused it. An unconfirmed completion outranks
+    // a failed refresh, since it asks for something the list alone can't show.
     readonly property var listNotice: {
+        if (addNotice !== null)
+            return addNotice;
         if (unconfirmedIds.length > 0)
             return { icon: "❓", message: "Unable to verify completion", instruction: "Refresh to check" };
         if (client.staleText !== "")
@@ -326,6 +365,16 @@ PluginComponent {
                 Row {
                     spacing: Theme.spacingXS
 
+                    DActionButton {
+                        visible: root.listReady
+                        iconName: "add"
+                        iconColor: root.adding ? Theme.primary : Theme.surfaceVariantText
+                        buttonSize: 28
+                        tooltipText: "Add Task"
+                        tooltipSide: "bottom"
+                        onClicked: root.adding ? root.closeAdd() : root.adding = true
+                    }
+
                     DRefreshButton {
                         busy: client.busy
                         iconColor: Theme.surfaceVariantText
@@ -352,6 +401,81 @@ PluginComponent {
             Column {
                 width: parent.width
                 spacing: Theme.spacingM
+
+                // Slides open under the header, pushing the list down.
+                Item {
+                    visible: height > 0
+                    width: parent.width
+                    height: root.adding && root.listReady ? addRow.implicitHeight : 0
+                    clip: true
+
+                    Behavior on height {
+                        NumberAnimation {
+                            duration: Theme.shortDuration
+                            easing.type: Theme.standardEasing
+                        }
+                    }
+
+                    Row {
+                        id: addRow
+                        width: parent.width
+                        spacing: Theme.spacingXS
+
+                        DTextField {
+                            id: addField
+                            width: addRow.width - dismiss.width - addRow.spacing
+                            anchors.verticalCenter: parent.verticalCenter
+                            leftIconName: "add_task"
+                            placeholderText: "Call mom tomorrow 5pm #Family p1"
+                            hidePlaceholderOnFocus: false
+                            busy: root.addBusy
+                            readOnly: root.addBusy
+                            keyForwardTargets: [addKeys]
+
+                            onAccepted: root.submitAdd(text)
+                            onTextEdited: root.addNotice = null
+
+                            Item {
+                                id: addKeys
+                                Keys.onEscapePressed: event => {
+                                    root.closeAdd();
+                                    event.accepted = true;
+                                }
+                            }
+                        }
+
+                        DActionButton {
+                            id: dismiss
+                            anchors.verticalCenter: parent.verticalCenter
+                            iconName: "close"
+                            iconColor: Theme.surfaceVariantText
+                            buttonSize: 28
+                            tooltipText: "Dismiss"
+                            tooltipSide: "bottom"
+                            onClicked: root.closeAdd()
+                        }
+                    }
+
+                    Connections {
+                        target: root
+
+                        function onAddingChanged() {
+                            if (root.adding)
+                                Qt.callLater(() => addField.forceActiveFocus());
+                            else
+                                addField.text = "";
+                        }
+                    }
+
+                    Connections {
+                        target: client
+
+                        function onAdded(outcome, detail) {
+                            if (outcome === "ok")
+                                addField.text = "";
+                        }
+                    }
+                }
 
                 ErrorNotice {
                     visible: root.blocker !== null
