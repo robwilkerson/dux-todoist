@@ -139,7 +139,7 @@ PluginComponent {
     }
 
     function timeLabel(task) {
-        return task.time === "" ? "" : Qt.formatTime(new Date(task.date + "T" + task.time), Locale.ShortFormat);
+        return task.time === "" ? "" : new Date(task.date + "T" + task.time).toLocaleTimeString(Qt.locale(), Locale.ShortFormat);
     }
 
     function dateLabel(task) {
