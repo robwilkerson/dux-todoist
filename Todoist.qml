@@ -69,6 +69,26 @@ PluginComponent {
         onDaysAheadChanged: refresh()
     }
 
+    // Waking from sleep rebuilds the bar, whose first fetch can beat the
+    // network back and leave the pill offline. Once a link returns, retry; the
+    // delay gives DNS a moment to come up behind the link.
+    Connections {
+        target: NetworkService
+        function onNetworkStatusChanged() {
+            if (NetworkService.networkStatus !== "disconnected" && client.offline)
+                reconnectRetry.restart();
+        }
+    }
+
+    Timer {
+        id: reconnectRetry
+        interval: 3000
+        onTriggered: {
+            if (client.offline)
+                client.refresh();
+        }
+    }
+
     // The time the groups are drawn against, floored to the minute. Todoist
     // stores minutes, so a 3:00 PM task is overdue once this reads 3:00.
     property var now: minuteNow()
