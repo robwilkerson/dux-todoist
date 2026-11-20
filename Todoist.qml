@@ -69,22 +69,13 @@ PluginComponent {
         onDaysAheadChanged: refresh()
     }
 
-    // Waking from sleep rebuilds the bar, whose first fetch can beat the
-    // network back and leave the pill offline. Once a link returns, retry; the
-    // delay gives DNS a moment to come up behind the link.
+    // Waking from sleep rebuilds the bar, whose first fetch can start before
+    // the network is back and time out after it returns. Refresh whenever a
+    // link returns, whatever the fetch state.
     Connections {
         target: NetworkService
         function onNetworkStatusChanged() {
-            if (NetworkService.networkStatus !== "disconnected" && client.offline)
-                reconnectRetry.restart();
-        }
-    }
-
-    Timer {
-        id: reconnectRetry
-        interval: 3000
-        onTriggered: {
-            if (client.offline)
+            if (NetworkService.networkStatus !== "disconnected")
                 client.refresh();
         }
     }
