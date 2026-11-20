@@ -1,0 +1,47 @@
+name: 🤖 AI Code Review
+
+# Reviews pull requests with Alibaba's Open Code Review
+# (https://github.com/alibaba/open-code-review) on GPT-5.2, a different model
+# family from the one that writes the code. It runs on every push to a PR, so
+# there is no hourly limit beyond the OpenAI key's own quota.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+# Each job asks for what it needs.
+permissions: {}
+
+jobs:
+  review:
+    name: Automated Code Review
+    # Only PRs from this repo spend the model budget; a fork's PR gets no
+    # secrets under pull_request anyway.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    # A new push supersedes the review in progress.
+    concurrency:
+      group: ai-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      # Pinned to the v1.13.13 release commit, and the CLI it installs to the
+      # same version, so upstream changes land only when the pin moves.
+      - name: Review
+        uses: alibaba/open-code-review@445ad9dea3057346986197385858a1a281253cc9 # v1.13.13
+        with:
+          ocr_version: 1.13.13
+          llm_url: https://api.openai.com/v1
+          llm_auth_token: ${{ secrets.OCR_LLM_API_KEY }}
+          llm_model: gpt-5.2
+          llm_protocol: openai-responses
+          # Required by the action; llm_protocol above overrides it.
+          llm_use_anthropic: 'false'
+          # The default disables "thinking", a field OpenAI doesn't take.
+          llm_extra_body: '{}'
+          llm_reasoning_effort: high
+          effort: high
+          # Each push re-reviews the PR; skip findings already posted.
+          incremental: 'true'

@@ -1,0 +1,9 @@
+{
+  "include": ["**/*.qml"],
+  "rules": [
+    {
+      "path": "**/*.qml",
+      "rule": "This is a QML (Qt 6 / Quickshell) plugin for the Dux bar. Review it against the project rules in CLAUDE.md at the repo root: read that file before reviewing. Flag correctness bugs (bindings, signal timing, object lifetimes, async races), then violations of those rules."
+    }
+  ]
+}

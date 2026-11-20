@@ -76,8 +76,9 @@ Read on-demand; never preload at session start.
 
 ## Integrations
 
-- Repo `robwilkerson/dux-todoist` on GitHub. Issues live there; no CI, no
-  automated review.
+- Repo `robwilkerson/dux-todoist` on GitHub. Issues live there. No CI;
+  PRs get an automated review from Open Code Review on GPT-5.2
+  (`.github/workflows/ai-review.yml`), steered by `.opencodereview/rule.json`.
 - Todoist API v1 docs: https://developer.todoist.com/api/v1/. Auth is a personal
   token from Settings → Integrations → Developer, sent as
   `Authorization: Bearer <token>`.
