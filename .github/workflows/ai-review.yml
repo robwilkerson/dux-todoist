@@ -39,9 +39,10 @@ jobs:
           llm_protocol: openai-responses
           # Required by the action; llm_protocol above overrides it.
           llm_use_anthropic: 'false'
-          # The default disables "thinking", a field OpenAI doesn't take.
-          llm_extra_body: '{}'
-          llm_reasoning_effort: high
+          # Replaces the default, which disables "thinking", a field OpenAI
+          # doesn't take. The Responses API nests effort under "reasoning";
+          # llm_reasoning_effort would send a top-level field it rejects.
+          llm_extra_body: '{"reasoning": {"effort": "high"}}'
           effort: high
           # Each push re-reviews the PR; skip findings already posted.
           incremental: 'true'

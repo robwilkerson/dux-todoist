@@ -9,7 +9,7 @@
     "capabilities": ["dankbar-widget"],
     "component": "./Todoist.qml",
     "settings": "./TodoistSettings.qml",
-    "permissions": ["settings_read", "settings_write", "process"],
+    "permissions": ["settings_read", "settings_write", "process", "network"],
     "requires_dms": ">=2.0.0",
     "requires": ["secret-tool"]
 }
