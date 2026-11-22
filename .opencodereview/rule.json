@@ -3,7 +3,7 @@
   "rules": [
     {
       "path": "**/*.qml",
-      "rule": "This is a QML (Qt 6 / Quickshell) plugin for the Dux bar. Review it against the project rules in CLAUDE.md at the repo root: read that file before reviewing. Flag correctness bugs (bindings, signal timing, object lifetimes, async races), then violations of those rules."
+      "rule": "This is a QML (Qt 6 / Quickshell) plugin for the Dux bar. Review it against the project rules in CLAUDE.md at the repo root: read that file before reviewing. Flag correctness bugs (bindings, signal timing, object lifetimes, async races), then violations of those rules. The `qs.*` imports (`qs.Common`, `qs.Services`, `qs.DCommon.Widgets`, `qs.Modules.Plugins`) resolve only inside the Dux runtime, and their source is not in this repo. Any identifier not defined in the repo but used in a file with those imports (singletons like `Theme`, `SettingsData`, `I18n`, or widgets like `StyledText`) comes from them. Never flag such names as undefined, and never suggest `typeof` guards, local stubs, or vendoring for them."
     }
   ]
 }
