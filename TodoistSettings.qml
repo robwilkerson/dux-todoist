@@ -143,7 +143,9 @@ PluginSettings {
                 store.stdinEnabled = false;
             }
             // A failed save hands the paste back too, so fixing the keyring
-            // doesn't mean copying the token from Todoist again.
+            // doesn't mean copying the token from Todoist again. A keyring
+            // unlock prompt can hold the save open, so anything typed in the
+            // meantime wins.
             onExited: exitCode => {
                 store.stdinEnabled = true;
                 if (exitCode === 0) {
@@ -151,7 +153,8 @@ PluginSettings {
                     tokenSection.tokenState = "saved";
                     root.saveValue("tokenSavedAt", Date.now());
                 } else {
-                    tokenField.text = tokenSection.pending;
+                    if (tokenField.text.trim() === "")
+                        tokenField.text = tokenSection.pending;
                     tokenSection.pending = "";
                     tokenSection.errorText = storeErr.text.trim() || "secret-tool exited " + exitCode;
                     tokenSection.tokenState = "error";
