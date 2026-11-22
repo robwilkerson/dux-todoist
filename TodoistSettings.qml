@@ -84,6 +84,9 @@ PluginSettings {
                 id: tokenField
                 width: parent.width - saveButton.width - parent.spacing
                 placeholderText: "Paste API token"
+                // A keyring unlock prompt can hold a save open; locking the
+                // field keeps a failed save's hand-back from overwriting input.
+                enabled: tokenSection.tokenState !== "saving"
                 echoMode: TextInput.Password
                 showPasswordToggle: true
                 onAccepted: tokenSection.save()
@@ -143,9 +146,7 @@ PluginSettings {
                 store.stdinEnabled = false;
             }
             // A failed save hands the paste back too, so fixing the keyring
-            // doesn't mean copying the token from Todoist again. A keyring
-            // unlock prompt can hold the save open, so anything typed in the
-            // meantime wins.
+            // doesn't mean copying the token from Todoist again.
             onExited: exitCode => {
                 store.stdinEnabled = true;
                 if (exitCode === 0) {
@@ -153,8 +154,7 @@ PluginSettings {
                     tokenSection.tokenState = "saved";
                     root.saveValue("tokenSavedAt", Date.now());
                 } else {
-                    if (tokenField.text.trim() === "")
-                        tokenField.text = tokenSection.pending;
+                    tokenField.text = tokenSection.pending;
                     tokenSection.pending = "";
                     tokenSection.errorText = storeErr.text.trim() || "secret-tool exited " + exitCode;
                     tokenSection.tokenState = "error";
