@@ -86,7 +86,7 @@ PluginSettings {
                 placeholderText: "Paste API token"
                 // A keyring unlock prompt can hold a save open; locking the
                 // field keeps a failed save's hand-back from overwriting input.
-                enabled: tokenSection.tokenState !== "saving"
+                enabled: !store.running
                 echoMode: TextInput.Password
                 showPasswordToggle: true
                 onAccepted: tokenSection.save()
@@ -95,7 +95,7 @@ PluginSettings {
             DButton {
                 id: saveButton
                 text: "Save"
-                enabled: tokenField.text.trim() !== "" && tokenSection.tokenState !== "saving"
+                enabled: tokenField.text.trim() !== "" && !store.running
                 anchors.verticalCenter: parent.verticalCenter
                 onClicked: tokenSection.save()
             }
