@@ -156,9 +156,14 @@ PluginComponent {
         function onCompleted(taskId, ok, errorText) {
             if (!root.completions[taskId])
                 return;
+            // Worded like the popout's notices, so a rejected token says
+            // what to do rather than "HTTP 401".
             if (!ok) {
                 root.dropCompletion(taskId);
-                ToastService.showError("Couldn't complete task in Todoist", errorText);
+                const notice = root.failureNotice(errorText, "Try again");
+                // Toast details hide behind an expand button, so it all goes
+                // on the one line.
+                ToastService.showError(notice.message + ". " + notice.instruction + ".");
                 return;
             }
             root.completions = Object.assign({}, root.completions, {
