@@ -20,6 +20,12 @@ QML (Qt 6 / Quickshell) only. No build step, no package manager, no test
 framework. Data comes from Todoist API v1 (`https://api.todoist.com/api/v1/`).
 `just` runs the dev loop, mirroring `dms-protonvpn`.
 
+The `qs.*` imports (`qs.Common`, `qs.Services`, `qs.DCommon.Widgets`,
+`qs.Modules.Plugins`) resolve only inside the Dux runtime; their source is in
+`/usr/share/quickshell/dms/`, not this repo. Names like `Theme`, `SettingsData`,
+`I18n`, and `StyledText` come from them. They are never undefined, and need no
+`typeof` guards or local stubs.
+
 ## Hard Constraints
 
 - **Plugin id is `todoist`.** Registry ids are camelCase, no hyphens. The
@@ -77,8 +83,9 @@ Read on-demand; never preload at session start.
 ## Integrations
 
 - Repo `robwilkerson/dux-todoist` on GitHub. Issues live there. No CI;
-  PRs get an automated review from Open Code Review on GPT-5.2
-  (`.github/workflows/ai-review.yml`), steered by `.opencodereview/rule.json`.
+  PRs get an automated review from PR-Agent on GPT-5.2
+  (`.github/workflows/ai-review.yml`), which reads this file as its review
+  rules. Keep project rules here rather than in reviewer configs.
 - Todoist API v1 docs: https://developer.todoist.com/api/v1/. Auth is a personal
   token from Settings → Integrations → Developer, sent as
   `Authorization: Bearer <token>`.

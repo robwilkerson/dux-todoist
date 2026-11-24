@@ -1,12 +1,15 @@
 name: 🤖 AI Code Review
 
-# Reviews pull requests with Alibaba's Open Code Review
-# (https://github.com/alibaba/open-code-review) on GPT-5.2, a different model
-# family from the one that writes the code. It runs on every push to a PR, so
-# there is no hourly limit beyond the OpenAI key's own quota.
+# Reviews pull requests with PR-Agent (https://github.com/The-PR-Agent/pr-agent)
+# on GPT-5.2, a different model family from the one that writes the code. Every
+# PR gets one review when it opens, draft or not. Each push to a draft gets
+# another, so the iterating happens before a human is asked to look. Otherwise
+# it reviews only on demand: comment /review, /improve, or /ask on the PR.
 on:
   pull_request:
     types: [opened, reopened, synchronize]
+  issue_comment:
+    types: [created]
 
 # Each job asks for what it needs.
 permissions: {}
@@ -14,35 +17,124 @@ permissions: {}
 jobs:
   review:
     name: Automated Code Review
-    # Only PRs from this repo spend the model budget; a fork's PR gets no
-    # secrets under pull_request anyway.
-    if: github.event.pull_request.head.repo.full_name == github.repository
-    # A new push supersedes the review in progress.
+    # Only the owner spends the model budget. Automatic reviews run on PRs
+    # from this repo, and on pushes only while the PR is a draft. Commands
+    # (/review, /improve, /ask) run only for the owner, on any PR, so the
+    # owner can choose to review a fork PR; a stranger's comment can't run it.
+    if: >-
+      github.event.sender.type != 'Bot' && (
+        (github.event_name == 'pull_request'
+          && github.event.pull_request.head.repo.full_name == github.repository
+          && (github.event.action != 'synchronize' || github.event.pull_request.draft))
+        || (github.event_name == 'issue_comment'
+          && github.event.issue.pull_request
+          && github.event.comment.author_association == 'OWNER'
+          && (startsWith(github.event.comment.body, '/review')
+            || startsWith(github.event.comment.body, '/improve')
+            || startsWith(github.event.comment.body, '/ask')))
+      )
+    # A new push supersedes the review in progress. Each command gets its own
+    # group: GitHub keeps only one pending job per group, so a shared one would
+    # drop a queued command when the next arrived. It sits on the job, after
+    # the if, so a skipped run (a bot's comment, say) can't cancel a real one.
     concurrency:
-      group: ai-review-${{ github.event.pull_request.number }}
-      cancel-in-progress: true
+      group: ai-review-${{ github.event.pull_request.number || github.event.issue.number }}-${{ github.event.comment.id || 'push' }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     permissions:
       contents: read
+      issues: write # PR comments go through the issues API
       pull-requests: write
     steps:
-      # Pinned to the v1.13.13 release commit, and the CLI it installs to the
-      # same version, so upstream changes land only when the pin moves.
+      # Pinned by digest. Its attestation shows The-PR-Agent's publish workflow
+      # built it from the v0.50.0 tag. Move the tag and digest together.
       - name: Review
-        uses: alibaba/open-code-review@445ad9dea3057346986197385858a1a281253cc9 # v1.13.13
-        with:
-          ocr_version: 1.13.13
-          llm_url: https://api.openai.com/v1
-          llm_auth_token: ${{ secrets.OCR_LLM_API_KEY }}
-          llm_model: gpt-5.2
-          llm_protocol: openai-responses
-          # Required by the action; llm_protocol above overrides it.
-          llm_use_anthropic: 'false'
-          # Replaces the default, which disables "thinking", a field OpenAI
-          # doesn't take. The Responses API nests effort under "reasoning";
-          # llm_reasoning_effort would send a top-level field it rejects.
-          llm_extra_body: '{"reasoning": {"effort": "high"}}'
-          effort: high
-          # Each push re-reviews the PR; skip findings already posted.
-          incremental: 'true'
+        uses: docker://pragent/pr-agent:0.50.0-github_action@sha256:548e894a88071180832b2f4233f734d0acd0db1a879e2fcbaa70bac8b8372ebe
+        env:
+          OPENAI_KEY: ${{ secrets.PRAGENT_LLM_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+          # No fallback model: a failed call should fail visibly, not quietly
+          # review with something else.
+          config.model: gpt-5.2
+          config.fallback_models: '[]'
+          # Bugs here tend to span functions, such as two calls whose order
+          # matters, so the model sees more code around each change and
+          # reasons longer about it. PRs are small; the extra cost is modest.
+          config.reasoning_effort: high
+          # High effort on a large diff runs past PR-Agent's 120s default.
+          config.ai_timeout: '300'
+          # The largest prompt PR-Agent builds. Its 32K default pruned most of
+          # a large PR's files before the model saw them.
+          config.max_model_tokens: '128000'
+          config.patch_extra_lines_before: '20'
+          config.patch_extra_lines_after: '10'
+          config.max_extra_lines_before_dynamic_context: '30'
+          # Don't re-post inline findings already on the PR from an earlier run.
+          config.persistent_inline_comments: 'true'
+          # Review against the project's own rules. CLAUDE.md is the one place
+          # they live; it's read from the target branch, so a PR that changes a
+          # rule is reviewed against the old one.
+          config.repo_context_files: '["CLAUDE.md"]'
+          # Branch names don't count as tickets; only a link in the PR body does.
+          config.extract_issue_from_branch: 'false'
+          # Review only. /describe would rewrite the PR body, and /improve
+          # doubles the cost; both stay available on demand.
+          github_action_config.auto_review: 'true'
+          github_action_config.auto_describe: 'false'
+          github_action_config.auto_improve: 'false'
+          github_action_config.pr_actions: '["opened", "reopened"]'
+          github_action_config.handle_push_trigger: 'true'
+          github_action_config.push_commands: '["/review"]'
+          # Labels follow the repo's own type and priority scheme.
+          pr_reviewer.enable_review_labels_security: 'false'
+          pr_reviewer.enable_review_labels_effort: 'false'
+          # The most findings one /review reports; PR-Agent's default is 3. Kept
+          # high so it never cuts a real finding: the prompt asks for "up to"
+          # this many, and earlier findings on the PR count toward it too.
+          pr_reviewer.num_max_findings: '30'
+          # Each finding goes on the lines it's about; only findings that can't
+          # be placed stay in the summary comment.
+          pr_reviewer.inline_key_issues: 'true'
+          # Quiet by design: drop the summary's intro line and its effort and
+          # tests rows, which carry no findings, the security row, which repeats
+          # the findings posted inline, and the comment announcing an in-place
+          # update.
+          pr_reviewer.enable_intro_text: 'false'
+          pr_reviewer.require_estimate_effort_to_review: 'false'
+          pr_reviewer.require_tests_review: 'false'
+          pr_reviewer.require_security_review: 'false'
+          pr_reviewer.final_update_message: 'false'
+          # How to read the PR's intent, and the bar a finding must clear.
+          pr_reviewer.extra_instructions: |
+            Treat the PR title, description, and linked tickets as context for what the change is meant to do. Any of them may be missing, thin, or out of date; that is never a finding. Judge whether the change does what that intent suggests, and whether it is sound: security, architecture, and code quality. Raise a gap with a ticket only when the PR claims something the code doesn't deliver, or does something neither the ticket nor the description asks for. A PR may cover part of a ticket on purpose; don't list the rest. Check each concrete claim the description makes about the code, such as what it validates, removes, or leaves untouched, against the code itself, and report any claim the code doesn't back.
+
+            Report an issue only when it is likely under normal use of the code as written. Skip issues that need:
+            - unusual or hostile input from the operator running the code;
+            - rare timing, such as a race within a confirmation prompt, unless it can cause data loss or other irreversible harm;
+            - a hypothetical bad value in config the repo already sets, not one this PR changes;
+            - an attacker who already has the access the issue would grant.
+
+            Don't ask for more tests or CI coverage.
+
+            If the PR description explains why a concern is handled or doesn't apply, don't raise it, unless the code contradicts the description.
+          # /improve, on demand only. Each suggestion is a change the author can
+          # commit from the PR, and a run that finds nothing posts nothing.
+          pr_code_suggestions.committable_code_suggestions: 'true'
+          pr_code_suggestions.focus_only_on_problems: 'false'
+          pr_code_suggestions.num_code_suggestions_per_chunk: '6'
+          pr_code_suggestions.publish_output_no_suggestions: 'false'
+          # The review's bar, with a scope line in place of its paragraph on
+          # intent; /improve's prompt carries only the PR title.
+          pr_code_suggestions.extra_instructions: |
+            Suggest improvements that stay within the scope of the change; leave unrelated cleanup alone.
+
+            Report an issue only when it is likely under normal use of the code as written. Skip issues that need:
+            - unusual or hostile input from the operator running the code;
+            - rare timing, such as a race within a confirmation prompt, unless it can cause data loss or other irreversible harm;
+            - a hypothetical bad value in config the repo already sets, not one this PR changes;
+            - an attacker who already has the access the issue would grant.
+
+            Don't ask for more tests or CI coverage.
+
+            If the PR description explains why a concern is handled or doesn't apply, don't raise it, unless the code contradicts the description.
