@@ -77,8 +77,6 @@ Read on-demand; never preload at session start.
 - **Reference** `~/Development/lookout-software/dms-protonvpn`, `dms-caffeinate`,
   `dms-distro-menu` — sibling plugins by the same author. Justfile, README shape,
   `.gitignore`, and `.claude/` conventions follow theirs.
-- **Reference** [`Zeknes/todoist-dms`](https://github.com/Zeknes/todoist-dms) —
-  prior-art pill and panel. Read for API patterns only; it uses a Python helper.
 
 ## Integrations
 
