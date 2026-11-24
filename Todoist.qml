@@ -242,12 +242,18 @@ PluginComponent {
         return Qt.formatDate(d, "yyyy-MM-dd");
     }
 
+    // Day before month where the locale's own short date puts it there.
+    readonly property string dayFormat: {
+        const short = I18n.locale().dateFormat(Locale.ShortFormat);
+        return short.indexOf("d") < short.indexOf("M") ? "ddd, d MMM" : "ddd, MMM d";
+    }
+
     function dayLabel(date) {
-        return Qt.formatDate(date, "ddd, MMM d");
+        return date.toLocaleDateString(I18n.locale(), dayFormat);
     }
 
     function timeLabel(task) {
-        return task.time === "" ? "" : Qt.formatTime(new Date(task.date + "T" + task.time), SettingsData.use24HourClock ? "HH:mm" : "h:mm AP");
+        return task.time === "" ? "" : new Date(task.date + "T" + task.time).toLocaleTimeString(I18n.locale(), SettingsData.use24HourClock ? "HH:mm" : "h:mm AP");
     }
 
     function dateLabel(task) {
@@ -261,7 +267,7 @@ PluginComponent {
 
     // Calendar weeks start on Todoist's "Start of week", or the locale's
     // first day until that's read.
-    readonly property int weekStart: client.weekStart >= 0 ? client.weekStart : Qt.locale().firstDayOfWeek
+    readonly property int weekStart: client.weekStart >= 0 ? client.weekStart : I18n.locale().firstDayOfWeek
 
     // Overdue shows only when it has tasks. The rest show when at least one
     // day of the window falls in them, even if empty. Tomorrow wins over a
