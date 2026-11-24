@@ -338,6 +338,14 @@ Item {
         busy = false;
     }
 
+    // Task names are Todoist markdown. Links (common from the browser
+    // extension) keep their title and bold keeps its text; the rest is rare
+    // enough to show as typed.
+    function plainText(content) {
+        // One level of parentheses inside the URL, as in Wikipedia links.
+        return content.replace(/\[([^\]]*)\]\((?:[^()]|\([^()]*\))*\)/g, "$1").replace(/\*\*(.+?)\*\*/g, "$1");
+    }
+
     function toTask(t) {
         // All-day dues are a bare date. Timed dues add a floating time, which
         // Date reads as local, or end in "Z" for a fixed timezone, which Date
@@ -346,7 +354,7 @@ Item {
         const when = raw.length > 10 ? new Date(raw) : null;
         return {
             id: t.id,
-            content: t.content,
+            content: plainText(t.content),
             date: when ? Qt.formatDate(when, "yyyy-MM-dd") : raw,
             time: when ? Qt.formatTime(when, "HH:mm") : "",
             recurring: !!t.due?.is_recurring,

@@ -15,10 +15,11 @@ Editing tasks stays in Todoist's own app, one click away from the popout.
   gnome-keyring, KDE Wallet, or KeePassXC all work. Your API token is stored
   there. On Fedora, `secret-tool` comes from `libsecret`; on Debian and Ubuntu,
   from `libsecret-tools`.
-- **The Todoist app** (optional, x86_64 only): the
+- **The Todoist app** (x86_64 only): the
   [Flathub build](https://flathub.org/apps/com.todoist.Todoist) or any install
-  with a desktop entry. Used only for "Open Todoist". Without it, the bar mark
-  turns your theme's error color and the popout says Todoist wasn't found.
+  with a desktop entry. The popout hands editing off to it through "Open
+  Todoist". Without it, the bar mark turns your theme's error color and the
+  popout says Todoist wasn't found instead of listing tasks.
 
 ## Bar
 

@@ -347,10 +347,11 @@ PluginComponent {
     readonly property bool tokenRejected: client.staleText === "HTTP 401" || client.staleText === "HTTP 403"
 
     // Sits above a loaded list. A failed add is shown first, since it sits
-    // right under the field that caused it. An unconfirmed completion outranks
-    // a failed refresh, since it asks for something the list alone can't show.
+    // right under the field that caused it, and only while that field is open.
+    // An unconfirmed completion outranks a failed refresh, since it asks for
+    // something the list alone can't show.
     readonly property var listNotice: {
-        if (addNotice !== null)
+        if (adding && addNotice !== null)
             return addNotice;
         if (unconfirmedIds.length > 0)
             return { icon: "❓", message: "Unable to verify completion", instruction: "Refresh to check" };
