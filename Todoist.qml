@@ -338,6 +338,9 @@ PluginComponent {
     }
     readonly property bool listReady: blocker === null && client.status === "ready"
 
+    // A revoked token, while a list loaded with it is still up.
+    readonly property bool tokenRejected: client.staleText === "HTTP 401" || client.staleText === "HTTP 403"
+
     // Sits above a loaded list. A failed add is shown first, since it sits
     // right under the field that caused it. An unconfirmed completion outranks
     // a failed refresh, since it asks for something the list alone can't show.
@@ -426,6 +429,50 @@ PluginComponent {
             Column {
                 width: parent.width
                 spacing: Theme.spacingM
+
+                // Whose tasks these are. Hidden until the list loads, and
+                // while the token is rejected, so a bad token shows no account.
+                // Without a name, the email takes the name's place.
+                Item {
+                    visible: root.listReady && !root.tokenRejected && (client.accountName !== "" || client.accountEmail !== "")
+                    width: parent.width
+                    height: 32
+
+                    DCircularImage {
+                        id: avatar
+                        anchors.left: parent.left
+                        anchors.leftMargin: Theme.spacingS
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 24
+                        height: 24
+                        imageSource: client.avatarUrl
+                        fallbackIcon: "material:account_circle"
+                    }
+
+                    StyledText {
+                        anchors.left: avatar.right
+                        anchors.leftMargin: Theme.spacingS
+                        anchors.right: email.visible ? email.left : parent.right
+                        anchors.rightMargin: Theme.spacingS
+                        anchors.verticalCenter: parent.verticalCenter
+                        elide: Text.ElideRight
+                        text: client.accountName || client.accountEmail
+                        color: Theme.surfaceText
+                    }
+
+                    StyledText {
+                        id: email
+                        visible: client.accountName !== "" && client.accountEmail !== ""
+                        anchors.right: parent.right
+                        anchors.rightMargin: Theme.spacingS
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Math.min(implicitWidth, parent.width * 0.55)
+                        elide: Text.ElideMiddle
+                        text: client.accountEmail
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.surfaceVariantText
+                    }
+                }
 
                 // Slides open under the header, pushing the list down.
                 Item {

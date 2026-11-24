@@ -34,8 +34,17 @@ Item {
     property var tasks: []
 
     // Todoist's "Start of week" as a JS getDay() number (0 = Sunday), or -1
-    // until read. Read once per shell session.
+    // until read. Read with the account, once per token.
     property int weekStart: -1
+
+    // The connected account's name, email, and avatar URL, or "" until read
+    // or when it has none. Cleared when the token changes.
+    property string accountName: ""
+    property string accountEmail: ""
+    property string avatarUrl: ""
+
+    // The token the account fields were read with.
+    property string userToken: ""
 
     readonly property string query: "due before: +" + daysAhead + " days"
     readonly property string apiBase: "https://api.todoist.com/api/v1"
@@ -167,9 +176,16 @@ Item {
             if (debounce.running)
                 return;
             client.token = exitCode === 0 ? lookupOut.text.trim() : "";
+            if (client.token !== client.userToken) {
+                client.userToken = client.token;
+                client.accountName = "";
+                client.accountEmail = "";
+                client.avatarUrl = "";
+                client.weekStart = -1;
+            }
             if (client.token !== "") {
                 if (client.weekStart < 0)
-                    client.fetchWeekStart();
+                    client.fetchUser();
                 client.fetch(client.generation, null, []);
                 return;
             }
@@ -280,20 +296,28 @@ Item {
 
     // A failure leaves weekStart at -1, so the caller uses the locale's first
     // day and the next refresh tries again, unless a request is still out.
-    property bool weekStartPending: false
+    property bool userPending: false
 
-    function fetchWeekStart() {
-        if (weekStartPending)
+    function fetchUser() {
+        if (userPending)
             return;
-        weekStartPending = true;
+        userPending = true;
+        const token = client.token;
         request("GET", apiBase + "/user", (status, text) => {
-            client.weekStartPending = false;
-            let day = 0;
+            client.userPending = false;
+            // Read with a token that's since been replaced.
+            if (token !== client.token)
+                return;
+            let user = {};
             if (status === 200) {
                 try {
-                    day = JSON.parse(text).start_day;
+                    user = JSON.parse(text);
                 } catch (e) {}
             }
+            client.accountName = user.full_name || "";
+            client.accountEmail = user.email || "";
+            client.avatarUrl = user.avatar_medium || "";
+            const day = user.start_day;
             // Todoist counts 1 = Monday through 7 = Sunday.
             if (day >= 1 && day <= 7)
                 client.weekStart = day % 7;
