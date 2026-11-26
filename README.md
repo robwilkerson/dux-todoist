@@ -5,6 +5,8 @@ DankMaterialShell) bar widget for [Todoist](https://todoist.com). Puts your
 overdue and upcoming tasks one click away, without Todoist's tray icon or a
 window to open.
 
+![The popout open, listing tasks from Overdue through Next Week](docs/screenshot.png)
+
 Scope is deliberately narrow: **see what's due, add it, and check it off**.
 Editing tasks stays in Todoist's own app, one click away from the popout.
 
