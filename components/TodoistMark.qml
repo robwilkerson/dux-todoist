@@ -11,7 +11,7 @@ import qs.Common
 Item {
     id: mark
 
-    property real size: 24
+    property real size: Theme.iconSize
     property color markColor: Theme.widgetIconColor
 
     // Source viewBox. The paths are authored in these units and scaled to `size`.

@@ -124,7 +124,7 @@ Column {
                 height: width
                 radius: width / 2
                 color: row.pending ? row.accent : "transparent"
-                border.width: 1.5
+                border.width: Theme.outlineWidthFocused
                 border.color: row.pending || checkArea.containsMouse ? row.accent : Theme.surfaceVariantText
 
                 DIcon {

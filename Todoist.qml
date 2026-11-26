@@ -401,7 +401,7 @@ PluginComponent {
                         visible: root.listReady
                         iconName: "add"
                         iconColor: root.adding ? Theme.primary : Theme.surfaceVariantText
-                        buttonSize: 28
+                        buttonSize: Theme.buttonHeightXXS
                         tooltipText: "Add Task"
                         tooltipSide: "bottom"
                         onClicked: root.adding ? root.closeAdd() : root.adding = true
@@ -410,7 +410,7 @@ PluginComponent {
                     DRefreshButton {
                         busy: client.busy
                         iconColor: Theme.surfaceVariantText
-                        buttonSize: 28
+                        buttonSize: Theme.buttonHeightXXS
                         tooltipText: "Refresh"
                         tooltipSide: "bottom"
                         onClicked: client.refresh()
@@ -419,7 +419,7 @@ PluginComponent {
                     DActionButton {
                         iconName: "settings"
                         iconColor: Theme.surfaceVariantText
-                        buttonSize: 28
+                        buttonSize: Theme.buttonHeightXXS
                         tooltipText: "Plugin Settings"
                         tooltipSide: "bottom"
                         onClicked: {
@@ -440,15 +440,15 @@ PluginComponent {
                 Item {
                     visible: root.listReady && !root.tokenRejected && (client.accountName !== "" || client.accountEmail !== "")
                     width: parent.width
-                    height: 32
+                    height: Theme.buttonHeightXS
 
                     DCircularImage {
                         id: avatar
                         anchors.left: parent.left
                         anchors.leftMargin: Theme.spacingS
                         anchors.verticalCenter: parent.verticalCenter
-                        width: 24
-                        height: 24
+                        width: Theme.iconSize
+                        height: Theme.iconSize
                         imageSource: client.avatarUrl
                         fallbackIcon: "material:account_circle"
                     }
@@ -525,7 +525,7 @@ PluginComponent {
                             anchors.verticalCenter: parent.verticalCenter
                             iconName: "close"
                             iconColor: Theme.surfaceVariantText
-                            buttonSize: 28
+                            buttonSize: Theme.buttonHeightXXS
                             tooltipText: "Dismiss"
                             tooltipSide: "bottom"
                             onClicked: root.closeAdd()
@@ -647,7 +647,7 @@ PluginComponent {
                 DButton {
                     width: parent.width
                     text: "Open Todoist"
-                    buttonHeight: 36
+                    buttonHeight: Theme.buttonHeightS
                     visible: root.appInstalled
                     onClicked: root.openApp()
                 }
