@@ -302,9 +302,9 @@ PluginComponent {
         };
     }
 
-    // The plugin can't work at all: no Todoist app, or no secret-tool to read
-    // the token with. Tints the pill and styles the popout message as an error.
-    readonly property bool hardFail: !appInstalled || client.status === "noSecretTool"
+    // The plugin can't work at all: no secret-tool to read the token with.
+    // Tints the pill and styles the popout message as an error.
+    readonly property bool hardFail: client.status === "noSecretTool"
 
     // Also tinted while Todoist can't be reached, until a request gets through.
     readonly property color pillColor: hardFail || client.offline ? Theme.error : Theme.widgetIconColor
@@ -312,8 +312,6 @@ PluginComponent {
     // Stands in for the list when it can't be shown, as ErrorNotice fields,
     // or null. Loading isn't an error, so it's handled apart.
     readonly property var blocker: {
-        if (!appInstalled)
-            return { icon: "🔎", message: "Todoist not installed", instruction: "Install it to use this widget" };
         switch (client.status) {
         case "noToken":
             return { icon: "🔑", message: "Missing API token", instruction: "Add it in plugin settings" };

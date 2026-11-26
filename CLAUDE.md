@@ -45,10 +45,11 @@ The `qs.*` imports (`qs.Common`, `qs.Services`, `qs.DCommon.Widgets`,
 - **Find and launch Todoist through its desktop entry**
   (`DesktopEntries.heuristicLookup("com.todoist.Todoist")`), never a `todoist`
   binary: the Flatpak puts none on `PATH`. The app is single-instance, so a
-  second launch raises the existing window. No IPC. When the entry is missing,
-  the pill turns `Theme.error` and the popout says so instead of listing tasks.
-- **x86_64 only.** The Todoist Flatpak has no aarch64 build. Without Todoist, the
-  plugin shows a clear empty state instead of erroring.
+  second launch raises the existing window. No IPC.
+- **The app is optional.** Listing, adding, and completing go through the API;
+  only "Open Todoist" needs the app, so that button hides when the entry is
+  missing and nothing else changes. The Flatpak is x86_64 only, so this is
+  what keeps the plugin usable on aarch64.
 - **Icon is Todoist's own mark** (SVG in the repo), never a Material icon.
 - **Size bar content with `Theme.barIconSize(...)`**, never `Theme.iconSize`.
   Colors come from `Theme.*`, no literals.
