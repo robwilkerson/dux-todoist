@@ -66,6 +66,23 @@ popout.
 
 ## Install
 
+### From the Registry
+
+> [!NOTE]
+> This works only if/when the plugin is accepted into the
+> [Dux plugin registry](https://github.com/AvengeMedia/dms-plugin-registry).
+> Until then, install it manually.
+
+Find **Todoist** in Settings → Plugins → Browse and install it, or run:
+
+```sh
+dms plugins install todoist
+```
+
+Then follow the steps after the manual install below.
+
+### Manually
+
 Dux loads plugins from `~/.config/dms/plugins/`. Either clone this repo
 directly into that directory:
 
@@ -83,14 +100,14 @@ ln -s "$(pwd)/dux-todoist" ~/.config/dms/plugins/todoist
 
 The directory name must match the plugin id, `todoist`. Then:
 
-1. Enable it in Settings → Plugin Management. Adding it to a bar alone isn't
+1. Enable it in Settings → Plugins. Adding it to a bar alone isn't
    enough; a plugin that isn't enabled never loads, and nothing says so.
 2. Add it to a bar section.
 3. Open its settings and save your API token.
 
 ## Uninstall
 
-Remove it from the bar in Settings → Plugin Management, delete the plugin
+Remove it from the bar, disable it in Settings → Plugins, delete the plugin
 directory, and clear the token from your keyring:
 
 ```sh
